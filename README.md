@@ -81,7 +81,9 @@ le travail restant. Le micro est toujours celui du **Mac**.
 - Icône vélo dans la barre des menus ; démarrage avec le Mac activé et confirmé par macOS.
 - Sunshine retiré du Mac et Moonlight désinstallé du Bike.
 - Interface affichée sur le Bike et bureau Mac en miroir, confirmés par l’utilisateur.
-- Lecture réelle des capteurs : cadence 0, résistance 34 au premier échantillon.
+- Lecture réelle pendant le pédalage : cadence 53–62 tr/min, résistance 58,
+  puissance 134–177 W. Barre alimentée et chrono automatique en progression,
+  confirmés par le diagnostic embarqué puis par l’utilisateur.
 - Parakeet V3 sélectionné et testé hors ligne sur des fichiers français et anglais ;
   modèles existants du cache FluidAudio réutilisés. Whisper `base` reste disponible.
 - Audio du micro Mac transcrit lors d’un essai manuel avec Whisper ; autorisations
@@ -92,12 +94,15 @@ le travail restant. Le micro est toujours celui du **Mac**.
   conservée, seconde collée et envoyée, vérifié dans la même session.
 - Dictée envoyée depuis le Bike pendant le pédalage, confirmée par réception des
   messages et journaux de collage/Entrée. Filtrage des interjections ajouté ensuite.
+- Kcal estimées cumulées avec objectif modifiable (200 par défaut), total mémorisé
+  et remise à zéro de séance. Calcul, interruptions et restauration testés ;
+  présentation et modification de l’objectif vérifiées dans le navigateur.
 - Tests des outils, du tunnel, des protections HTTP, du chronomètre et de la segmentation réussis.
 - Optimisation VNC vérifiée sur un flux réel de 3024 × 1964 : première image
   de 422 584 octets, puis mises à jour de 16 782, 3 776 et 4 octets lorsque
   peu de pixels changent. Ce n’est pas une mesure de latence tactile.
 
-**À valider en usage réel :** précision du toucher, métriques pendant le pédalage,
+**À valider en usage réel :** précision du toucher, métriques sur des séances prolongées,
 insertion et qualité de Parakeet dans les applications d’IA, dernière optimisation
 VNC sur le Bike et comportement lors des déconnexions.
 La vitesse est estimée depuis la puissance, pas mesurée indépendamment.

@@ -9,3 +9,6 @@ dialog{padding:0;border:1px solid var(--line);border-radius:26px;width:min(480px
 .send-option{display:flex;flex-direction:row;align-items:center;gap:10px;margin:16px 0;font-size:13px;line-height:1.5}.send-option input{width:18px;height:18px;min-width:18px;margin:0;padding:0;accent-color:var(--accent)}
 
 @media(max-width:1050px){.dock .secondary{display:none}}
+.calorie-metric{position:relative;min-width:104px}.calorie-metric progress{position:absolute;bottom:-8px;width:100%;height:3px;border:0;border-radius:3px;overflow:hidden;appearance:none;background:var(--line);color:var(--accent)}.calorie-metric progress::-webkit-progress-bar{background:var(--line)}.calorie-metric progress::-webkit-progress-value{background:var(--accent)}.calorie-metric progress::-moz-progress-bar{background:var(--accent)}.calorie-metric.goal-reached strong,.calorie-metric.goal-reached .label{color:var(--accent)}dialog label.calorie-goal{flex-direction:row;align-items:center;justify-content:space-between;gap:16px;margin:18px 0}.calorie-goal input{width:110px;padding:12px}
+@media(max-width:950px){.dock .speed-metric{display:none}}
+@media(max-width:560px){.dock .resistance-metric{display:none}.calorie-metric{min-width:94px}}

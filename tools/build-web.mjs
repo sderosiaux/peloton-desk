@@ -1,12 +1,17 @@
 import { build } from 'esbuild';
 import { mkdir, copyFile, cp, readFile, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
+import { versionAssets } from './web-assets.mjs';
 await mkdir('.local/web', { recursive: true });
 await build({ entryPoints: ['web/app.js'], outfile: '.local/web/app.js', bundle: true,
   minify: true, format: 'esm', target: 'chrome90', legalComments: 'eof',
   banner: { js: '/*! Includes noVNC 1.7.0 (MPL-2.0). Source: sources/noVNC-1.7.0.tar.gz; notices: licenses/SOURCES.txt. */' } });
 await build({ entryPoints: ['web/voice.js'], outfile: '.local/web/voice.js', bundle: true, minify: true, format: 'esm', target: 'chrome90' });
-for (const name of ['index.html', 'style.css', 'voice.html', 'voice.css']) await copyFile(`web/${name}`, `.local/web/${name}`);
+for (const name of ['style.css', 'voice.css']) await copyFile(`web/${name}`, `.local/web/${name}`);
+for (const [page, names] of [['index.html', ['app.js', 'style.css']], ['voice.html', ['voice.js', 'style.css', 'voice.css']]]) {
+  const assets = Object.fromEntries(await Promise.all(names.map(async name => [name, await readFile(`.local/web/${name}`)])));
+  await writeFile(`.local/web/${page}`, versionAssets(await readFile(`web/${page}`, 'utf8'), assets));
+}
 await cp('node_modules/@novnc/novnc/LICENSE.txt', '.local/web/noVNC-LICENSE.txt');
 await mkdir('.local/web/licenses', { recursive: true });
 for(const file of ['LICENSE.MPL-2.0','LICENSE.BSD-2-Clause','LICENSE.BSD-3-Clause'])

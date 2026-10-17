@@ -182,6 +182,42 @@ automatiquement la séance en pause. `···` remet le compteur à zéro et réa
 démarrage au pédalage. Le temps pédalé avant l’ouverture de l’app n’est pas reconstruit.
 La barre affiche aussi la puissance instantanée en watts fournie par le Bike.
 
+Les **kcal estimées** cumulent l’énergie produite pendant la séance, avec une
+jauge vers **200 kcal** par défaut. L’objectif se modifie dans `···` et reste
+mémorisé. Le total continue au-delà de l’objectif, qui devient « Objectif atteint »
+sans interrompre le bureau. « Nouvelle séance » remet durée et calories à zéro.
+La puissance est intégrée entre deux mesures valides, par moyenne des deux valeurs ;
+les pauses manuelles, mesures absentes et intervalles supérieurs à 2,5 secondes
+ne sont pas comblés. Seuls les joules cumulés sont sauvegardés : réouvrir l’app
+ne compte pas le temps passé hors de celle-ci. Les minutes antérieures à
+l’installation de ce compteur ne peuvent pas être reconstituées.
+
+Conversion retenue : `kcal = joules / (4184 × 0,24)`, soit environ 60 kcal
+pour dix minutes à 100 W. Le rendement de 24 % est une hypothèse fixe de
+l’application, pas une mesure personnelle ni l’algorithme Peloton. L’approche
+puissance + rendement est notamment décrite par
+[Strava](https://support.strava.com/fr/articles/15402159-comment-strava-calcule-t-il-les-calories).
+Les rendements mesurés varient avec l’effort et la méthode de calcul : voir
+[l’étude méthodologique sur le cyclisme](https://pmc.ncbi.nlm.nih.gov/articles/PMC6557926/).
+
+Les URLs des scripts et styles incluent une empreinte de leur contenu : une
+mise à jour du compagnon ne doit pas réutiliser un ancien script conservé par
+le WebView, même après une réinstallation de l’APK. Recharger l’app permet
+de récupérer les nouveaux fichiers.
+
+Diagnostic sans capture d’écran ni données de dictée :
+
+```sh
+adb -s "$SERIAL" shell dumpsys activity local.pelotondesk
+```
+
+`bike` contient les mesures natives ; `bar` contient celles transmises à la
+barre ainsi que `elapsedMs`, `running` et `manualPause`. `energy` expose
+les joules cumulés, les kcal estimées et l’objectif. `barAgeMs` indique
+l’âge du dernier rafraîchissement (environ 500 ms maximum hors ralentissement).
+Une barre absente ou ancienne alors que les capteurs sont actifs signale un
+problème côté interface, pas nécessairement une panne des capteurs.
+
 Au démarrage du compagnon, une réponse HTTP non JSON, tronquée ou une coupure
 réseau affiche un état d’attente et relance l’initialisation. Les erreurs de syntaxe
 JSON internes ne sont plus affichées sur l’écran du Bike. Les refus d’authentification

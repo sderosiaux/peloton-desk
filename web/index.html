@@ -22,10 +22,11 @@
     <button id="session" class="session" aria-label="Démarrer la session"><span id="session-icon">▶</span></button>
     <div class="metric"><span class="label">DURÉE</span><strong id="duration">00:00</strong></div>
     <span class="divider"></span>
-    <div class="metric"><span class="label">VITESSE <small>EST.</small></span><strong><span id="speed">—</span><small>km/h</small></strong></div>
-    <div class="metric"><span class="label">RÉSISTANCE</span><strong id="resistance">—</strong></div>
+    <div class="metric speed-metric"><span class="label">VITESSE <small>EST.</small></span><strong><span id="speed">—</span><small>km/h</small></strong></div>
+    <div class="metric resistance-metric"><span class="label">RÉSISTANCE</span><strong id="resistance">—</strong></div>
     <div class="metric"><span class="label">PUISSANCE</span><strong><span id="power">—</span><small>W</small></strong></div>
     <div class="metric secondary"><span class="label">CADENCE</span><strong><span id="cadence">—</span><small>rpm</small></strong></div>
+    <div class="metric calorie-metric" id="calorie-metric"><span class="label" id="calorie-label">KCAL EST.</span><strong><span id="calories">0</span><small>/ <span id="calorie-target">200</span></small></strong><progress id="calorie-progress" value="0" max="200" aria-label="Objectif de 200 kcal estimées"></progress></div>
     <span class="divider"></span>
     <button id="voice" class="voice" aria-pressed="false"><svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></svg><span id="voice-label">Dictée</span></button>
     <button id="settings" class="settings" aria-label="Réglages de la session">···</button>
@@ -41,7 +42,9 @@
     <span class="eyebrow">VOTRE SESSION</span><h2>Tout à portée de main.</h2>
     <p id="sensor-status">Capteurs en attente.</p><p id="voice-status">Dictée locale sur le Mac.</p>
     <label class="send-option"><input id="send-return" type="checkbox"> Envoyer avec Entrée après chaque phrase</label>
-    <div class="actions"><button id="insert-pending" hidden>Insérer la dictée en attente</button><button id="desktop-mode">Bureau fluide · passer en image exacte</button><button id="reconnect">Reconnecter le bureau</button><button id="reset-timer">Remettre la durée à zéro</button></div>
+    <label class="calorie-goal">Objectif de la séance (kcal estimées)<input id="calorie-goal" type="number" min="1" max="10000" step="1" value="200" inputmode="numeric"></label>
+    <p class="hint">Calories estimées à partir des watts et du temps de pédalage, avec un rendement supposé de 24 %. Le total est conservé à la réouverture ; une pause de séance suspend aussi ce compteur.</p>
+    <div class="actions"><button id="insert-pending" hidden>Insérer la dictée en attente</button><button id="desktop-mode">Bureau fluide · passer en image exacte</button><button id="reconnect">Reconnecter le bureau</button><button id="reset-timer">Nouvelle séance · remettre les compteurs à zéro</button></div>
     <p class="hint">Touchez un champ sur le Mac, puis activez la dictée. Les pauses terminent les phrases. L’option ci-dessus contrôle l’envoi avec Entrée. Les rires et interjections isolées sont ignorés.</p>
     <button class="primary" id="close-settings">Revenir au bureau</button>
   </div></dialog>

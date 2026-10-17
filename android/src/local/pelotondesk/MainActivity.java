@@ -14,11 +14,17 @@ import android.webkit.WebViewClient;
 import android.webkit.WebChromeClient;
 import android.webkit.JsResult;
 import android.net.Uri;
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
+import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     private WebView web;
     private BikeSensors sensors;
     private volatile boolean autoDesktop;
+    private volatile String renderedMetrics = "{}";
+    private volatile String renderedEnergy = "{}";
+    private volatile long renderedAt;
     private final Handler handler = new Handler();
     private static final String URL = "http://127.0.0.1:8765/";
     private final Runnable retry = () -> web.loadUrl(URL);
@@ -75,9 +81,31 @@ public class MainActivity extends Activity {
     }
     @Override protected void onPause() { super.onPause(); web.evaluateJavascript("window.DeskPause&&window.DeskPause()", null); }
     @Override protected void onDestroy() { handler.removeCallbacks(retry); sensors.stop(); web.destroy(); super.onDestroy(); }
+    @Override public void dump(String prefix, FileDescriptor fd, PrintWriter writer, String[] args) {
+        // Keep diagnostics limited to bike telemetry; never dump the launch token or desktop.
+        writer.println(prefix + "bike=" + (sensors == null ? "null" : sensors.json()));
+        writer.println(prefix + "bar=" + renderedMetrics);
+        writer.println(prefix + "energy=" + renderedEnergy);
+        writer.println(prefix + "barAgeMs=" + (renderedAt == 0 ? -1 : android.os.SystemClock.elapsedRealtime() - renderedAt));
+    }
     private class Bridge {
         @JavascriptInterface public String connectionToken() { return getPreferences(MODE_PRIVATE).getString("token", ""); }
         @JavascriptInterface public String metrics() { return sensors.json(); }
+        @JavascriptInterface public void reportMetrics(double cadence, double watts, double elapsedMs, boolean running, boolean paused) {
+            try {
+                JSONObject value = new JSONObject();
+                value.put("cadence", cadence); value.put("power", watts); value.put("elapsedMs", elapsedMs);
+                value.put("running", running); value.put("manualPause", paused);
+                renderedMetrics = value.toString(); renderedAt = android.os.SystemClock.elapsedRealtime();
+            } catch (Exception ignored) { }
+        }
+        @JavascriptInterface public void reportEnergy(double joules, double kcal, int goal) {
+            try {
+                JSONObject value = new JSONObject();
+                value.put("joules", joules); value.put("kcal", kcal); value.put("goal", goal);
+                renderedEnergy = value.toString();
+            } catch (Exception ignored) { }
+        }
         @JavascriptInterface public boolean shouldOpenDesktop() {
             boolean requested=autoDesktop; autoDesktop=false; return requested;
         }
