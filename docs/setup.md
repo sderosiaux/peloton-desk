@@ -3,9 +3,42 @@
 ## 1. Identifier l’écran et préparer la liaison
 
 Relever le modèle d’écran, la version Android et le numéro de build dans les réglages
-du Bike. Activer le mode développeur et le débogage USB selon le guide OpenPelo
-correspondant au logiciel installé. Utiliser un câble USB de données adapté au port
-de l’écran et accepter l’autorisation affichée sur le Bike.
+du Bike. Activer le mode développeur selon le guide OpenPelo correspondant au logiciel
+installé. ADB fonctionne en Wi-Fi ou en USB ; les outils du dépôt acceptent les deux.
+
+### Wi-Fi avec code d’appairage
+
+Si **Wireless debugging → Pair device with pairing code** est disponible, aucun
+câble n’est nécessaire. Connecter le Mac et le Bike au même réseau Wi-Fi, ouvrir
+cette fenêtre et la garder ouverte. Relever son adresse IP et son port d’appairage :
+
+```sh
+adb pair IP_DU_BIKE:PORT_APPAIRAGE
+```
+
+Saisir le code temporaire demandé dans le terminal. Après appairage, ADB peut se
+connecter automatiquement. Sinon, revenir à l’écran principal **Wireless debugging**
+et utiliser l’adresse et le port de connexion qui y sont affichés :
+
+```sh
+adb connect IP_DU_BIKE:PORT_CONNEXION
+adb devices -l
+```
+
+Les ports d’appairage et de connexion sont généralement différents. Utiliser ensuite
+l’identifiant exact affiché par `adb devices -l` dans `--serial`. Si l’adresse ou le
+port change, reprendre ceux affichés sur le Bike. `adb mdns services` permet de
+chercher les services annoncés sur le réseau ; une liste vide n’empêche pas de
+tenter la connexion manuelle avec les coordonnées de l’écran.
+
+Sources : [Android ADB sans fil](https://developer.android.com/tools/adb#connect-to-a-device-over-wi-fi),
+[appairage OpenPelo](https://github.com/doudar/Openpelo#connect-a-device).
+
+### USB
+
+Si l’appairage sans fil n’est pas disponible, activer **USB debugging**, utiliser
+un câble USB de données adapté au port de l’écran et accepter l’autorisation
+affichée sur le Bike.
 
 Le guide OpenPelo inclut une réinitialisation du firmware dans son parcours.
 Le présent dépôt n’exécute aucune réinitialisation ; commencer par identifier le

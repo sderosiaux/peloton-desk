@@ -47,7 +47,9 @@ Le nom doit correspondre au bundle `.app` présent dans `/Applications` ou
 `~/Applications`. Le lanceur Sunshine attend lui aussi le bundle macOS installé
 depuis le DMG ; une installation CLI seule doit être lancée séparément.
 
-Après connexion du Bike, relever son identifiant avec `adb devices -l`, puis :
+Le Bike peut se connecter en Wi-Fi par code d’appairage ou en USB ; voir le
+[guide de connexion](docs/setup.md#1-identifier-lécran-et-préparer-la-liaison).
+Après connexion, relever son identifiant avec `adb devices -l`, puis :
 
 ```sh
 python3 tools/desk.py doctor --serial IDENTIFIANT_DU_BIKE
