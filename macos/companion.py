@@ -234,7 +234,7 @@ def main():
         try:
             open_desktop(args.serial, auto_connect=False)
         except DeskError:
-            print('Bike non connecté. Utilisez PD → Ouvrir le bureau sur le Bike.', flush=True)
+            print('Bike non connecté. Utilisez le menu vélo → Ouvrir le bureau sur le Bike.', flush=True)
     print('Peloton Desk ready. Gateway bound to 127.0.0.1 only.', flush=True)
     web.run_app(create_app(token), host='127.0.0.1', port=PORT, access_log=None, print=None)
 

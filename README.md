@@ -3,18 +3,18 @@
 Une app sur le Peloton Bike pour travailler sur son Mac en pédalant : bureau
 tactile, résistance, cadence, vitesse estimée, durée et dictée locale.
 
-Le compagnon **Peloton Desk Mac** se trouve dans la barre des menus (`PD`).
+Le compagnon **Peloton Desk Mac** se trouve dans la barre des menus (icône de vélo).
 L’app Android utilise le partage d’écran intégré au Mac, avec noVNC embarqué.
 Moonlight, Sunshine, Grupetto et VoiceInk ne sont pas nécessaires à ce parcours.
 
 ## Usage quotidien
 
-Sur le Mac, cliquer **PD → Ouvrir le bureau sur le Bike**. Le compagnon rétablit
+Sur le Mac, cliquer **Icône vélo → Ouvrir le bureau sur le Bike**. Le compagnon rétablit
 le tunnel, retrouve le Bike appairé si son adresse Wi-Fi a changé, et affiche
 le bureau. Une connexion déjà active est conservée ; sinon le mot de passe VNC
 est demandé sur le Bike. Aucun Terminal n’est nécessaire.
 
-Cocher **PD → Démarrer avec le Mac** pour retrouver ce menu après ouverture de
+Cocher **Icône vélo → Démarrer avec le Mac** pour retrouver ce menu après ouverture de
 session macOS. Cette option est désactivée tant que vous ne la cochez pas.
 Le Bike doit être allumé, sur le même réseau, avec Wireless debugging actif.
 Si le Bike est éteint au démarrage du Mac, le compagnon reste disponible : utiliser
@@ -26,7 +26,7 @@ le bouton après avoir allumé le vélo.
 2. Sur le Mac, activer **Réglages Système → Général → Partage → Partage d’écran**,
    puis l’accès VNC avec un mot de passe dédié, choisi directement dans macOS.
 3. Sur le Bike, toucher **Afficher mon bureau** et saisir ce mot de passe.
-4. Pour la dictée : menu **PD → Autorisations de dictée…**, puis autoriser le micro
+4. Pour la dictée : menu **Icône vélo → Autorisations de dictée…**, puis autoriser le micro
    et l’accessibilité pour **Peloton Desk Mac**.
 5. Depuis le Bike, sélectionner un champ texte, activer **Dictée**, puis parler.
 
@@ -39,6 +39,8 @@ brancher le micro placé près du vélo au Mac, pas à la tablette Peloton.
 
 - APK compilé, signé et installé sur un Bike PLTN-RB1VQ, Android 11 / API 30.
 - Compagnon installé dans `/Applications/Peloton Desk Mac.app` et serveur actif.
+- Icône vélo dans la barre des menus ; démarrage avec le Mac activé et confirmé par macOS.
+- Sunshine retiré du Mac et Moonlight désinstallé du Bike.
 - Interface affichée sur le Bike et bureau Mac en miroir, confirmés par l’utilisateur.
 - Lecture réelle des capteurs : cadence 0, résistance 34 au premier échantillon.
 - Modèle Whisper `base` multilingue vérifié par SHA-256 et testé sur un audio public.

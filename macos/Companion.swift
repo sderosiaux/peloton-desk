@@ -210,7 +210,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         item=NSStatusBar.system.statusItem(withLength:NSStatusItem.variableLength)
-        item.button?.title="PD"
+        let icon=NSImage(systemSymbolName:"bicycle",accessibilityDescription:"Peloton Desk")
+        icon?.isTemplate=true
+        icon?.size=NSSize(width:22,height:18)
+        item.button?.image=icon
+        item.button?.setAccessibilityLabel("Peloton Desk")
         item.button?.toolTip="Peloton Desk — ouvrir le bureau sur le Bike"
         let menu=NSMenu()
         menu.autoenablesItems=false
@@ -352,6 +356,19 @@ if args.contains("--self-test") {
     print("Voice segmentation checks passed; no microphone or input events used.")
 } else if args.count==4 && args[1]=="--voice" {
     let recorder=Recorder(whisper:args[2],model:args[3]);recorder.begin();RunLoop.main.run()
+} else if args.contains("--enable-login") || args.contains("--login-status") {
+    do {
+        if args.contains("--enable-login") && SMAppService.mainApp.status != .enabled {
+            try SMAppService.mainApp.register()
+        }
+        switch SMAppService.mainApp.status {
+        case .enabled: print("Login item enabled")
+        case .requiresApproval: print("Login item requires approval in System Settings"); exit(2)
+        case .notRegistered: print("Login item not registered"); exit(1)
+        case .notFound: print("Login item bundle not found"); exit(1)
+        @unknown default: print("Unknown login item status"); exit(1)
+        }
+    } catch { print("Login item registration failed: \(error.localizedDescription)"); exit(1) }
 } else {
     let delegate=AppDelegate();let app=NSApplication.shared;app.delegate=delegate;app.run()
 }

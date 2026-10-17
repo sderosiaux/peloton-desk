@@ -8,7 +8,7 @@ Le [guide de connexion ADB](legacy-streaming.md#1-identifier-lécran-et-prépare
 décrit l’appairage Wi-Fi et le problème de permissions réseau rencontré sur ce Mac.
 Un câble n’est pas nécessaire lorsque l’appairage sans fil fonctionne.
 
-Ouvrir **Peloton Desk Mac** dans Applications. Le menu **PD → Ouvrir le bureau
+Ouvrir **Peloton Desk Mac** dans Applications. Le menu **Icône vélo → Ouvrir le bureau
 sur le Bike** rétablit le tunnel ADB et ouvre l’app en demandant directement la
 connexion au bureau. Si une session existe encore, elle est conservée. Le compagnon
 reste ouvert même si le Bike est éteint. Un nouvel essai se fait depuis ce menu.
@@ -17,9 +17,14 @@ Le lanceur peut retrouver une annonce ADB TLS du même Bike après changement
 d’adresse. Il vérifie son numéro matériel avant d’ouvrir l’app ; il ne choisit pas
 un autre appareil disponible et ne bascule pas sur l’ancien port ADB sans TLS.
 
-L’option **PD → Démarrer avec le Mac** ajoute ou retire le compagnon des éléments
+L’option **Icône vélo → Démarrer avec le Mac** ajoute ou retire le compagnon des éléments
 d’ouverture de session macOS. Elle reste décochée par défaut. Si macOS demande
 une confirmation, la terminer dans Ouverture et extensions.
+
+Pour une installation automatisée, le bundle installé accepte `--enable-login`
+et `--login-status`. Ces commandes utilisent ServiceManagement et n’ouvrent pas
+le micro ni le bureau. L’état `Login item enabled` confirme l’inscription ; une
+demande d’approbation reste à terminer dans les réglages macOS.
 
 Garder le dépôt à son emplacement d’installation : le bundle utilise `.venv`
 et les fichiers compilés. Le même lanceur est disponible en ligne de commande :
@@ -59,7 +64,7 @@ Le compagnon HTTP, lui, n’écoute que sur la boucle locale.
 ## Dictée locale
 
 Le micro doit être connecté au Mac et sélectionné comme entrée audio dans macOS.
-Le bouton **PD → Autorisations de dictée…** prépare les autorisations Microphone
+Le bouton **Icône vélo → Autorisations de dictée…** prépare les autorisations Microphone
 et Accessibilité pour **Peloton Desk Mac**. L’accessibilité permet d’identifier le
 champ sélectionné et d’y insérer la transcription.
 
