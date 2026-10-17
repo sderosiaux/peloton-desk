@@ -1,19 +1,17 @@
 import RFB from '@novnc/novnc';
 import { passwordDesktop, fastDesktop } from './desktop.mjs';
-import { elapsed, toggle, formatDuration } from './session.mjs';
+import { elapsed, toggle, startOnPedaling, formatDuration } from './session.mjs';
+import { createAPI } from './api.mjs';
 const PasswordDesktop = passwordDesktop(RFB);
 const FastDesktop = fastDesktop(RFB);
 const $ = id => document.getElementById(id);
 let rfb, status = {}, voiceActive = false, eventSocket, noticeTimer, pendingText = '', finishing = false, lastTranscript = 0, previewPhrase = 0, desktopConnected = false;
-let voicePreferenceLoaded=false;
-let timer = { elapsed: Number(localStorage.getItem('elapsed') || 0), running: false, started: 0 };
+let voicePreferenceLoaded=false, companionReady=false;
+let timer = { elapsed: Number(localStorage.getItem('elapsed') || 0), running: false, started: 0, manualPause: localStorage.getItem('sessionPaused')==='true' };
 let fastMode = localStorage.getItem('desktopMode') !== 'exact';
 const origin = location.origin, wsOrigin = origin.replace(/^http/, 'ws');
 function notice(message) { $('notice').textContent=message; $('notice').hidden=false; clearTimeout(noticeTimer); noticeTimer=setTimeout(()=>$('notice').hidden=true,6500); }
-async function api(path, body) {
-  const response = await fetch('/api/'+path, { method: body === undefined ? 'GET':'POST', headers:{'Content-Type':'application/json'}, body:body === undefined?undefined:JSON.stringify(body) });
-  const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Connexion interrompue.'); return data;
-}
+const api=createAPI();
 async function authenticate() {
   const token = window.DeskDevice?.connectionToken() || new URLSearchParams(location.hash.slice(1)).get('token');
   if (token) { await api('auth',{token}); history.replaceState(null,'','/'); }
@@ -34,7 +32,8 @@ function disconnected(){ desktopConnected=false; $('password-dialog').close(); $
 $('password-form').addEventListener('submit',e=>{ e.preventDefault(); rfb?.sendCredentials({password:$('password').value}); $('password').value=''; $('password-dialog').close(); });
 $('password-cancel').onclick=()=>{ $('password-dialog').close(); rfb?.disconnect(); };
 $('connect').onclick=openDesktop;
-$('session').onclick=()=>{ timer=toggle(timer,performance.now()); $('session-icon').textContent=timer.running?'Ⅱ':'▶'; $('session').setAttribute('aria-label',timer.running?'Mettre la session en pause':'Démarrer la session'); };
+function sessionState(){ $('session-icon').textContent=timer.running?'Ⅱ':'▶'; $('session').setAttribute('aria-label',timer.running?'Mettre la session en pause':'Démarrer la session');localStorage.setItem('sessionPaused',String(timer.manualPause)); }
+$('session').onclick=()=>{timer=toggle(timer,performance.now());sessionState();};
 setInterval(()=>{ const ms=elapsed(timer,performance.now()); $('duration').textContent=formatDuration(ms); localStorage.setItem('elapsed',Math.round(ms)); },500);
 $('settings').onclick=()=>$('settings-dialog').showModal();
 function modeLabel(){ $('desktop-mode').textContent=fastMode?'Bureau fluide · passer en image exacte':'Image exacte · passer en bureau fluide'; }
@@ -42,7 +41,7 @@ modeLabel();
 $('desktop-mode').onclick=()=>{fastMode=!fastMode;localStorage.setItem('desktopMode',fastMode?'fast':'exact');modeLabel();notice('Mode choisi. Touchez « Reconnecter le bureau » pour l’appliquer.');};
 $('close-settings').onclick=()=>$('settings-dialog').close();
 $('reconnect').onclick=()=>{ $('settings-dialog').close(); stopVoice(); desktopConnected=false; openDesktop(); };
-$('reset-timer').onclick=()=>{timer={elapsed:0,running:false,started:0};$('session-icon').textContent='▶';$('session').setAttribute('aria-label','Démarrer la session');$('duration').textContent='00:00';localStorage.setItem('elapsed','0');$('settings-dialog').close();};
+$('reset-timer').onclick=()=>{timer={elapsed:0,running:false,started:0,manualPause:false};sessionState();$('duration').textContent='00:00';localStorage.setItem('elapsed','0');$('settings-dialog').close();};
 $('insert-pending').onclick=()=>{
   if(!rfb || !$('welcome').hidden){notice('Connectez le bureau et sélectionnez un champ de texte.');return;}
   for(const character of pendingText.replace(/[\r\n\t]/g,' ')){
@@ -52,27 +51,55 @@ $('insert-pending').onclick=()=>{
 };
 async function stopVoice(){if(!voiceActive&&!finishing)return;try{await api('voice/stop',{source:'bike'});}catch{} voiceState(false);}
 function voiceState(active,phase){voiceActive=active;$('send-return').disabled=active||phase==='finishing'||phase==='starting';finishing=phase==='finishing'||phase==='starting';$('voice').disabled=finishing;$('voice').setAttribute('aria-pressed',String(active));$('voice-label').textContent=phase==='starting'?'Préparation…':finishing?'Transcription…':active?'À l’écoute':'Dictée';}
-$('voice').onclick=async()=>{try{if(voiceActive){$('voice').disabled=true;await api('voice/finish',{});return;}if($('welcome').hidden===false){notice('Connectez le bureau, puis touchez un champ de texte.');return;}$('voice').disabled=true;await api('voice/start',{sendReturn:$('send-return').checked});notice('Démarrage du micro…');}catch(e){$('voice').disabled=false;notice(e.message);}};
+$('voice').onclick=async()=>{try{if(voiceActive){$('voice').disabled=true;await api('voice/finish',{});return;}if($('welcome').hidden===false){notice('Connectez le bureau, puis touchez un champ de texte.');return;}$('voice').disabled=true;await api('voice/start',{sendReturn:$('send-return').checked});}catch(e){$('voice').disabled=false;notice(e.message);}};
 function voiceEvents(){
   lastTranscript=0;
   eventSocket=new WebSocket(wsOrigin+'/events');
-  eventSocket.onmessage=e=>{const data=JSON.parse(e.data);if(data.type==='voice-state'){voiceState(data.active,data.phase);if(typeof data.sendReturn==='boolean')$('send-return').checked=data.sendReturn;}if(data.type==='error'||data.type==='notice'||data.type==='voice-stage')notice(data.message);if(data.type==='transcription-preview'){previewPhrase=data.phraseId;$('live-text').textContent=data.text;$('live-transcript').hidden=false;$('live-text').scrollTop=$('live-text').scrollHeight;}if(data.type==='voice-state'&&data.phase==='idle')$('live-transcript').hidden=true;if(data.type==='transcription'&&data.id>lastTranscript){if(data.phraseId>=previewPhrase)$('live-transcript').hidden=true;lastTranscript=data.id;if(data.replayed)return;if(!data.inserted&&data.text){pendingText += (pendingText?' ':'')+data.text;$('insert-pending').hidden=false;notice('Champ modifié : dictée conservée. Touchez le bon champ puis choisissez « Insérer la dictée en attente » dans ···.');}else notice(data.message||'Phrase vide : aucun texte inséré.');}};
+  eventSocket.onmessage=e=>{
+    const data=JSON.parse(e.data);
+    if(data.type==='voice-state'){
+      voiceState(data.active,data.phase);
+      if(typeof data.sendReturn==='boolean')$('send-return').checked=data.sendReturn;
+      if(data.phase==='idle')$('live-transcript').hidden=true;
+    }
+    // Routine dictation stages and successful pastes stay quiet on the Bike.
+    if(data.type==='error'||data.type==='notice')notice(data.message);
+    if(data.type==='transcription-preview'){
+      previewPhrase=data.phraseId;$('live-text').textContent=data.text;
+      $('live-transcript').hidden=false;$('live-text').scrollTop=$('live-text').scrollHeight;
+    }
+    if(data.type==='transcription-ignored'&&data.phraseId>=previewPhrase)$('live-transcript').hidden=true;
+    if(data.type==='transcription'&&data.id>lastTranscript){
+      if(data.phraseId>=previewPhrase)$('live-transcript').hidden=true;
+      lastTranscript=data.id;if(data.replayed)return;
+      if(!data.inserted&&data.text){
+        pendingText += (pendingText?' ':'')+data.text;$('insert-pending').hidden=false;
+        notice('Dictée conservée : sélectionnez le champ puis « Insérer la dictée en attente » dans ···.');
+      }
+    }
+  };
   eventSocket.onclose=()=>{voiceState(false);setTimeout(voiceEvents,3000);};
 }
 function metrics(){
   try{
     const m=JSON.parse(window.DeskDevice?.metrics()||'{"available":false,"detail":"Capteurs disponibles sur le Bike."}');
-    for(const key of ['speed','resistance','cadence'])$(key).textContent=m.available&&Number.isFinite(m[key])?(key==='speed'?m[key].toFixed(1):Math.round(m[key])):'—';
+    const nextTimer=startOnPedaling(timer,m.available?m.cadence:undefined,performance.now());
+    if(nextTimer!==timer){timer=nextTimer;sessionState();}
+    for(const key of ['speed','resistance','power','cadence'])$(key).textContent=m.available&&Number.isFinite(m[key])?(key==='speed'?m[key].toFixed(1):Math.round(m[key])):'—';
     $('sensor-status').textContent=m.available?'Capteurs connectés · vitesse estimée à partir de la puissance.':m.detail||'En attente des capteurs.';
   }catch{$('sensor-status').textContent='Capteurs indisponibles.';}
 }
 $('send-return').onchange=()=>localStorage.setItem('sendReturn',String($('send-return').checked));
-async function refreshStatus(){
+async function refreshStatus(throwOnError=false){
   try{status=await api('status');if(!voicePreferenceLoaded){$('send-return').checked=localStorage.getItem('sendReturn')===null?status.voiceAutoSend:localStorage.getItem('sendReturn')==='true';voicePreferenceLoaded=true;}$('voice-status').textContent=status.voiceDetail;$('connect').hidden=!status.vncAvailable;
     if(!$('welcome').hidden)$('connection-detail').textContent=status.vncAvailable?'Votre Mac est prêt.':'Sur le Mac : Réglages Système → Général → Partage → Partage d’écran. Activez l’accès VNC avec un mot de passe dédié.';
-  }catch(e){status.vncAvailable=false;$('connection-detail').textContent=e.message;$('connect').hidden=true;}
+  }catch(e){status.vncAvailable=false;$('connection-detail').textContent=e.message;$('connect').hidden=true;if(throwOnError)throw e;}
 }
-async function main(){try{await authenticate();await refreshStatus();voiceEvents();if(window.DeskDevice?.shouldOpenDesktop())openDesktop();}catch(e){$('connection-detail').textContent=e.message;}metrics();setInterval(metrics,500);setInterval(refreshStatus,5000);}
+async function connectCompanion(){
+  try{await authenticate();await refreshStatus(true);companionReady=true;voiceEvents();if(window.DeskDevice?.shouldOpenDesktop())openDesktop();}
+  catch(e){$('connection-detail').textContent=e.message;if(e.retryable)setTimeout(connectCompanion,2000);}
+}
+function main(){connectCompanion();metrics();setInterval(metrics,500);setInterval(()=>{if(companionReady)refreshStatus();},5000);}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)stopVoice();});
 window.DeskPause=stopVoice;
 window.DeskOpenDesktop=async()=>{if(desktopConnected)return;await refreshStatus();openDesktop();};

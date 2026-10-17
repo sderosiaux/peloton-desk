@@ -59,7 +59,7 @@ class Voice:
             asyncio.get_running_loop().call_later(600, self.expire_history)
         if event['type'] not in ('audio-level', 'transcription-preview'):
             # Deliberately omit transcript, audio, paths and credentials from disk logs.
-            record = {key: event[key] for key in ('type', 'phase', 'active', 'targetFound', 'targetMode', 'inserted', 'enterPosted', 'deliveryReason', 'sendReturn', 'audioSeconds', 'elapsedMs', 'code') if key in event}
+            record = {key: event[key] for key in ('type', 'phase', 'active', 'targetFound', 'targetMode', 'inserted', 'enterPosted', 'deliveryReason', 'sendReturn', 'audioSeconds', 'elapsedMs', 'characters', 'code') if key in event}
             record['at'] = time.time()
             if 'text' in event: record['characters'] = len(event['text'])
             print(json.dumps(record, ensure_ascii=False), flush=True)

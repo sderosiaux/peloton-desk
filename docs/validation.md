@@ -33,6 +33,15 @@ Conserver les résultats personnels dans `.local/validation.md`.
 - [x] Tests : zones éloignées, texte sans perte, images identiques, CopyRect avec
   chevauchement, pixels inconnus, redimensionnement et demandes de rafraîchissement.
 - [ ] Fluidité et lisibilité de cette dernière optimisation confirmées sur le Bike.
+- [x] Mesures avant anticipation : mises à jour locales 17–26 ms ; aller-retour
+  ADB médian 54 ms, transfert Mac → Bike environ 14 Mbit/s sur le réseau conservé.
+  Mesures de transport, pas de latence visuelle après toucher.
+- [x] Tests d’anticipation d’une demande d’image : fragments, attente du rendu,
+  réponse vide sans blocage, redimensionnement et autres messages VNC.
+- [x] Zones unies transmises sans perte en 16 octets par rectangle via Tight Fill ;
+  tests des couleurs, de la continuité zlib et du flux avec curseur. Paquet généré
+  par Python également décodé par le véritable décodeur noVNC 1.7.0, avec entrée fragmentée.
+- [ ] Gain de fluidité de l’anticipation confirmé sur le Bike après mise à jour.
 - [ ] Reconnexion après veille et après interruption d’ADB.
 
 ## Dictée et focus
@@ -77,6 +86,12 @@ Conserver les résultats personnels dans `.local/validation.md`.
 - [x] Assemblage des segments longs avant collage/envoi : tests sans saisie réelle,
   y compris une fin de phrase exactement à la limite d’un segment de 20 secondes.
 - [ ] Aperçu Parakeet pendant une phrase longue et qualité sur le micro réel.
+- [x] Messages dictés depuis le Bike pendant le pédalage reçus dans Codex ; quatre
+  collages suivis d’Entrée dans les journaux (839–913 ms pour le traitement final).
+- [x] Tests sans micro : rires et interjections isolées filtrés ; commandes courtes,
+  réponses oui/non, nombres et phrases contenant « OK » conservés. Événements
+  ignorés exclus de l’historique et de la dictée en attente.
+- [ ] Filtre des interjections et absence de notifications répétitives confirmés sur le Bike.
 - [ ] Paroles françaises et anglaises correctement transcrites pendant le pédalage.
 - [ ] Changer de champ pendant une transcription empêche l’insertion automatique.
 - [ ] Insertion manuelle de la dictée en attente dans le champ choisi.
@@ -88,8 +103,16 @@ Conserver les résultats personnels dans `.local/validation.md`.
 
 - [ ] Cadence, résistance et vitesse estimée évoluent en pédalant et en tournant la molette.
 - [ ] Durée : démarrage, pause, reprise et remise à zéro.
+- [x] Tests : démarrage au pédalage, absence de double démarrage et respect d’une pause manuelle.
+- [ ] Puissance instantanée affichée et durée démarrant au pédalage confirmées sur le Bike.
 - [ ] Les métriques continuent pendant le bureau distant et la dictée.
 - [ ] La barre laisse accessibles les zones de travail utiles.
 
 Le critère final est une session de travail réelle : lire, changer de fenêtre,
 dicter un prompt et l’envoyer en pédalant, avec les métriques visibles.
+
+## Démarrage
+
+- [x] Tests des réponses HTML, JSON tronqué, coupure réseau puis reprise et refus
+  d’authentification. Aucun détail brut du serveur n’est exposé dans l’erreur affichée.
+- [ ] Démarrage à froid sur le Bike sans message « Unexpected token » confirmé.

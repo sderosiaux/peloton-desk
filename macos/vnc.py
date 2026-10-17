@@ -105,6 +105,11 @@ class FrameEncoder:
     def packet(self, image, x, y):
         width, height = image.size
         def header(encoding): return struct.pack('>HHHHi', x, y, width, height, encoding)
+        extrema = image.getextrema()
+        if all(low == high for low, high in extrema):
+            # Tight Fill: a blinking caret or cleared terminal area costs just
+            # one RGB color, with no PNG decoder or loss of text sharpness.
+            return header(7) + b'\x80' + bytes(low for low, _ in extrema)
         if width * height <= 256:
             return header(0) + image.tobytes('raw', 'RGBX')
         output = io.BytesIO()
@@ -262,9 +267,9 @@ async def fast_desktop(reader, ws, client=None):
                     raise ProtocolError('Unexpected framebuffer encoding')
                 if converted_size > MAX_PAYLOAD or len(converted_update) > 65534:
                     raise ProtocolError('Converted update too large')
-            await ws.send_bytes(struct.pack('>BBH', 0, 0, len(converted_update)))
-            for packet in converted_update:
-                await send_chunks(ws, packet)
+            # Batch small rectangles into the same WebSocket message instead
+            # of flushing the header and every caret/tile separately over ADB.
+            await send_chunks(ws, struct.pack('>BBH', 0, 0, len(converted_update)) + b''.join(converted_update))
         elif kind == 2:  # Bell
             await ws.send_bytes(bytes((kind,)))
         elif kind == 3:  # ServerCutText

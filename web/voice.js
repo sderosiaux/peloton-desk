@@ -1,7 +1,8 @@
+import { createAPI } from './api.mjs';
 const $=id=>document.getElementById(id);
 let active=false, finishing=false, preparing=false, socket, connected=false, previewPhrase=0, lastMessage='';
 const transcripts=new Map();
-async function api(path,body){const response=await fetch('/api/'+path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});const data=await response.json();if(!response.ok)throw new Error(data.error||'Connexion interrompue.');return data;}
+const api=createAPI();
 function controls(){ $('send-return').disabled=active||finishing||preparing;$('start').disabled=!connected||finishing||preparing;$('start').textContent=preparing?'Préparation…':finishing?'Fin de transcription…':active?'Terminer la dictée':'Démarrer la dictée';$('cancel').hidden=!active&&!finishing&&!preparing; }
 function event(data){
   if(data.type==='voice-state'){active=data.active;finishing=data.phase==='finishing';preparing=data.phase==='starting';controls();if(typeof data.sendReturn==='boolean')$('send-return').checked=data.sendReturn;if(data.microphone)$('microphone').textContent=data.microphone;if(data.model)$('model').textContent=data.model+' · LOCAL';$('stage').textContent=preparing?'Préparation du micro et du modèle…':finishing?'Micro arrêté · dernière phrase en cours…':active?'À l’écoute · sélectionnez votre champ et parlez.':lastMessage||'Micro arrêté.';if(!active)$('level').value=-60;}
@@ -9,6 +10,7 @@ function event(data){
   if(data.type==='voice-stage'||data.type==='error'||data.type==='notice')$('stage').textContent=lastMessage=data.message;
   if(data.type==='transcription-preview'){previewPhrase=data.phraseId;$('preview-text').textContent=data.text;$('preview').hidden=false;$('preview-text').scrollTop=$('preview-text').scrollHeight;}
   if(data.type==='voice-state'&&data.phase==='idle')$('preview').hidden=true;
+  if(data.type==='transcription-ignored'){if(data.phraseId>=previewPhrase)$('preview').hidden=true;$('stage').textContent=lastMessage=data.message;}
   if(data.type==='transcription'){if(data.phraseId>=previewPhrase)$('preview').hidden=true;if(data.text){transcripts.set(data.id,{text:data.text,at:data.at});for(const [id,item] of transcripts)if(Date.now()/1000-item.at>=600)transcripts.delete(id);while(transcripts.size>20)transcripts.delete(transcripts.keys().next().value);$('transcript').value=[...transcripts.values()].map(x=>x.text).join('\n\n');$('copy').disabled=false;}$('stage').textContent=lastMessage=data.message;}
 }
 function connect(){socket=new WebSocket(location.origin.replace(/^http/,'ws')+'/events?source=mac');socket.onopen=()=>{connected=true;controls();};socket.onmessage=e=>event(JSON.parse(e.data));socket.onclose=()=>{connected=false;active=false;finishing=false;preparing=false;controls();$('stage').textContent='Compagnon déconnecté · nouvelle tentative…';setTimeout(connect,2000);};}
@@ -17,6 +19,6 @@ window.stopDictation=$('cancel').onclick=async()=>{try{await api('voice/stop',{s
 $('send-return').onchange=()=>localStorage.setItem('sendReturn',String($('send-return').checked));
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('transcript').value);$('stage').textContent='Texte copié.';}catch{$('transcript').focus();$('transcript').select();$('stage').textContent='Texte sélectionné · utilisez ⌘C pour copier.';}};
 window.addEventListener('pagehide',()=>{if(active||finishing||preparing)fetch('/api/voice/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:'mac'}),keepalive:true}).catch(()=>{});});
-async function main(){try{const token=new URLSearchParams(location.hash.slice(1)).get('token');if(token){await api('auth',{token});history.replaceState(null,'',location.pathname);}const status=await api('status');$('send-return').checked=localStorage.getItem('sendReturn')===null?status.voiceAutoSend:localStorage.getItem('sendReturn')==='true';$('model').textContent=status.voiceModel+' · LOCAL';connect();}catch(e){$('stage').textContent=e.message;}}
+async function main(){try{const token=new URLSearchParams(location.hash.slice(1)).get('token');if(token){await api('auth',{token});history.replaceState(null,'',location.pathname);}const status=await api('status');$('send-return').checked=localStorage.getItem('sendReturn')===null?status.voiceAutoSend:localStorage.getItem('sendReturn')==='true';$('model').textContent=status.voiceModel+' · LOCAL';connect();}catch(e){$('stage').textContent=e.message;if(e.retryable)setTimeout(main,2000);}}
 setInterval(()=>{let changed=false;for(const [id,item] of transcripts)if(Date.now()/1000-item.at>=600){transcripts.delete(id);changed=true;}if(changed){$('transcript').value=[...transcripts.values()].map(x=>x.text).join('\n\n');$('copy').disabled=!transcripts.size;}},1000);
 main();

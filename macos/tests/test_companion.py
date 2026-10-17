@@ -143,6 +143,21 @@ if __name__ == '__main__':
     unittest.main()
 
 class VoiceEventTests(unittest.IsolatedAsyncioTestCase):
+    async def test_ignored_interjection_is_not_kept_or_replayed_as_pending_text(self):
+        from contextlib import redirect_stdout
+        import io
+        app = create_app('fixture-token')
+        voice = app[VOICE]
+        client = AsyncMock(); app[CLIENTS].add(client)
+        output = io.StringIO()
+        event = {'type':'transcription-ignored','phraseId':3,'deliveryReason':'non_content','characters':6}
+        with redirect_stdout(output):
+            await voice.emit(event)
+        self.assertFalse(voice.history)
+        self.assertEqual(voice.sequence, 0)
+        client.send_json.assert_awaited_once_with(event)
+        self.assertIn('non_content', output.getvalue())
+
     async def test_transcript_without_target_is_recoverable_and_logs_only_metadata(self):
         from contextlib import redirect_stdout
         import io

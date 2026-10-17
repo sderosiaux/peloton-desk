@@ -14,6 +14,9 @@ def rectangle(width, height, encoding=6):
 
 def decode_image(data):
     encoding = struct.unpack('>i', data[8:12])[0]
+    if encoding == 7:
+        assert data[12] == 0x80 and len(data) == 16
+        return Image.new('RGB',struct.unpack('>HH',data[4:8]),tuple(data[13:16]))
     if encoding == 21:
         return Image.open(io.BytesIO(data[12:]))
     if encoding == -260:
@@ -36,7 +39,13 @@ class FrameTests(unittest.TestCase):
             pixels = Image.new('RGB', (8, 8), color).tobytes('raw', 'RGBX')
             compressed = compressor.compress(pixels) + compressor.flush(zlib.Z_SYNC_FLUSH)
             converted = encoder.encode(rectangle(8, 8), compressed)
-            self.assertEqual(converted, rectangle(8, 8, 0) + pixels)
+            self.assertEqual(len(converted),16)
+            self.assertEqual(decode_image(converted).tobytes('raw','RGBX'),pixels)
+
+    def test_small_nonuniform_updates_keep_exact_raw_pixels(self):
+        image=Image.new('RGB',(8,8),'red');image.putpixel((0,0),(0,0,255))
+        pixels=image.tobytes('raw','RGBX')
+        self.assertEqual(FrameEncoder().encode(rectangle(8,8,0),pixels),rectangle(8,8,0)+pixels)
 
     def test_jpeg_preserves_dimensions_and_rgb_channel_order(self):
         image = Image.new('RGB', (160, 80), 'red')
@@ -47,13 +56,14 @@ class FrameTests(unittest.TestCase):
         self.assertGreater(decoded.getpixel((20, 40))[0], 240)
         self.assertGreater(decoded.getpixel((140, 40))[2], 240)
 
-    def test_flat_screen_uses_lossless_png_when_smaller(self):
+    def test_flat_screen_uses_a_single_lossless_color(self):
         image = Image.new('RGB', (320, 200), '#f5f4ef')
         compressor = zlib.compressobj()
         pixels = image.tobytes('raw', 'RGBX')
         data = compressor.compress(pixels) + compressor.flush(zlib.Z_SYNC_FLUSH)
         converted = FrameEncoder().encode(rectangle(320, 200), data)
-        self.assertEqual(struct.unpack('>i', converted[8:12])[0], -260)
+        self.assertEqual(struct.unpack('>i', converted[8:12])[0], 7)
+        self.assertEqual(len(converted),16)
         self.assertEqual(decode_image(converted).tobytes(), image.tobytes())
 
     def test_malformed_or_oversized_pixels_are_rejected(self):
@@ -91,7 +101,7 @@ class RelayTests(unittest.IsolatedAsyncioTestCase):
             await fast_desktop(reader, ws)
         await producer
         expected = b'RFB 003.008\n\x01\x02' + challenge + bytes(4) + initial
-        expected += b'\0\0\0\x02' + rectangle(8, 8, 0) + pixels + cursor + b'\x02'
+        expected += b'\0\0\0\x02' + rectangle(8, 8, 7) + b'\x80\xff\x00\x00' + cursor + b'\x02'
         self.assertEqual(bytes(ws.output), expected)
 
     async def test_authentication_failure_is_forwarded_without_reading_frames(self):
@@ -134,7 +144,7 @@ class DeltaTests(unittest.TestCase):
     def test_changed_terminal_region_is_lossless(self):
         self.screen.paste('white', (20, 100, 420, 124))
         packet, = self.update()
-        self.assertEqual(struct.unpack('>i', packet[8:12])[0], -260)
+        self.assertEqual(struct.unpack('>i', packet[8:12])[0], 7)
         self.assertEqual(decode_image(packet).tobytes(), self.screen.crop((20, 100, 420, 124)).tobytes())
 
     def test_copyrect_updates_cache_even_for_overlapping_scroll(self):

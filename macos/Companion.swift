@@ -114,6 +114,16 @@ func cleanTranscript(_ text: String) -> String {
     return clean
 }
 
+func isNonContentUtterance(_ text:String) -> Bool {
+    // Only discard utterances made entirely of known fillers. Short commands,
+    // yes/no answers, numbers, and phrases containing a filler remain intact.
+    let normalized=text.folding(options:[.diacriticInsensitive,.caseInsensitive],locale:Locale(identifier:"fr_FR"))
+    let words=normalized.split(whereSeparator:{ !$0.isLetter && !$0.isNumber }).map(String.init)
+    guard !words.isEmpty else { return !text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty }
+    let fillers:Set<String>=["ok","okay","okey","euh","heu","hum","hmm","hm","mm","mmm","ah","ha","eh","he","oh","ho","bah","ben","bon","alors","donc","voila","uh","um","erm"]
+    return words.allSatisfy { fillers.contains($0) || $0.range(of:"^(?:ha|ah|he|eh|hi|oh|ho){2,}$",options:.regularExpression) != nil }
+}
+
 // Resolve the Command shortcut in the user's layout, including AZERTY.
 // Approach informed by OpenWhispr's MIT-licensed macos-fast-paste helper.
 func pasteKey() -> CGKeyCode? {
@@ -435,6 +445,10 @@ final class Recorder {
             }
             text=completed
         } else { text=chunk }
+        if isNonContentUtterance(text) {
+            emit(["type":"transcription-ignored","phraseId":phraseID,"deliveryReason":"non_content","characters":text.count,"message":"Interjection ignorée · à l’écoute."])
+            return
+        }
         // Unknown containers may be a page background, not an editor.
         let result:DeliveryResult
         if sendReturn && target?.mode == "system" { result=DeliveryResult(reason:"input_not_confirmed") }
@@ -703,6 +717,12 @@ if args.contains("--check-input-config") {
     // No focus lookup, clipboard access, microphone or input events.
     emit(["accessibility":AXIsProcessTrusted(),"pasteKeyAvailable":pasteKey() != nil])
 } else if args.contains("--self-test") {
+    for text in ["Ha ha.","Ha ha ha.","Okay.","OK… euh, bon.","Hahaha !","Héhéhé.","Euh…","Hmm","Alors, voilà.","..."] {
+        precondition(isNonContentUtterance(text),"Unfiltered filler: \(text)")
+    }
+    for text in ["Continue.","Arrête.","Stop.","Oui.","Non.","42","OK, corrige ce bug.","Euh, affiche les logs.","C’est bon ?","Pourquoi ?","git status","Haha, ça fonctionne !",""] {
+        precondition(!isNonContentUtterance(text),"Discarded useful utterance: \(text)")
+    }
     var phraseText=PhraseText()
     precondition(phraseText.accept("Un début",final:false) == nil)
     precondition(phraseText.preview("provisoire") == "Un début provisoire")

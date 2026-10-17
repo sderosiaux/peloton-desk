@@ -102,6 +102,14 @@ automatique, leurs textes sont assemblés : un seul collage puis Entrée à la p
 ou au bouton Terminer. En mode collage seul, les segments terminés sont collés
 au fur et à mesure. Le texte provisoire peut changer.
 
+Un filtre local retire les phrases composées uniquement d’interjections connues
+ou de rires (« ha ha », « okay », « euh »), avant tout collage ou Entrée. Une
+phrase contenant aussi d’autres mots, une commande courte, oui/non ou un nombre
+est conservé. Il ne décide pas si une phrase est une commande pertinente.
+Les événements ignorés n’alimentent ni l’historique ni la dictée en attente.
+Le Bike conserve l’aperçu provisoire sans les notifications répétitives de parole,
+traitement ou collage réussi en haut de l’écran.
+
 La destination est choisie à la fin de la phrase, pas au début de l’écoute : on peut
 changer d’application entre deux phrases sans redémarrer. Les activations sont
 suivies sur la boucle principale macOS, puis le champ actif est relu à chaque contrôle.
@@ -167,7 +175,17 @@ Les données vieilles de plus de cinq secondes sont remplacées par des tirets.
 La vitesse est une approximation calculée à partir de la puissance.
 
 Le bouton ▶ démarre la durée ; Ⅱ la met en pause. Le compteur reprend sa valeur
-après réouverture, en restant en pause. `···` permet de le remettre à zéro.
+après réouverture. Le premier échantillon de cadence positive démarre aussi le
+chronomètre automatiquement. Une pause manuelle reste respectée, même en pédalant
+ou après réouverture ; ▶ permet de reprendre. S’arrêter de pédaler ne met pas
+automatiquement la séance en pause. `···` remet le compteur à zéro et réarme le
+démarrage au pédalage. Le temps pédalé avant l’ouverture de l’app n’est pas reconstruit.
+La barre affiche aussi la puissance instantanée en watts fournie par le Bike.
+
+Au démarrage du compagnon, une réponse HTTP non JSON, tronquée ou une coupure
+réseau affiche un état d’attente et relance l’initialisation. Les erreurs de syntaxe
+JSON internes ne sont plus affichées sur l’écran du Bike. Les refus d’authentification
+restent explicites et ne déclenchent pas une boucle infinie de réessais.
 
 ## Diagnostic
 

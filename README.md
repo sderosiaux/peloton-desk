@@ -39,11 +39,20 @@ l’image précédente et transmet seulement les zones modifiées. Les petites z
 restent sans perte ; les grandes images peuvent utiliser JPEG. Le défilement
 réutilise les pixels déjà présents lorsque macOS envoie une commande CopyRect.
 Pour conserver tous les pixels : **Image exacte** dans `···`, puis reconnecter.
+En mode fluide, le client demande la prochaine image pendant la réception de
+l’image courante, avec au plus une demande anticipée hors redimensionnement.
+Les zones unies utilisent une couleur RGB et les petits rectangles sont regroupés
+dans les messages réseau. Le client attend le rendu précédent avant de poursuivre.
 
 La dictée montre un **aperçu provisoire pendant la parole**, rafraîchi environ
 toutes les secondes avec Parakeet V3, toutes les deux secondes avec Whisper si le moteur suit.
 Une pause de 900 ms termine la phrase. La destination est le champ actif à cette
 pause : vous pouvez changer d’application sans arrêter l’écoute.
+Les rires et interjections isolées connus (« ha ha », « euh », « okay ») sont
+filtrés avant collage et envoi. Les commandes courtes, oui/non et les phrases
+comme « OK, corrige ce bug » restent intactes. Ce filtre local n’analyse pas
+l’intention générale d’une phrase. Sur le Bike, les notifications répétitives de
+dictée sont supprimées ; l’aperçu et les erreurs utiles restent visibles.
 Le texte final est collé avec ⌘V si la cible n’a pas changé pendant le traitement ; le
 presse-papiers précédent est ensuite restauré, sauf si vous avez copié autre chose.
 En mode collage seul, les éditeurs qui n’exposent pas un champ texte classique
@@ -81,6 +90,8 @@ le travail restant. Le micro est toujours celui du **Mac**.
   par l’utilisateur, avec l’option d’envoi automatique activée.
 - Passage fenêtre de dictée → Codex sans arrêter l’écoute : première phrase
   conservée, seconde collée et envoyée, vérifié dans la même session.
+- Dictée envoyée depuis le Bike pendant le pédalage, confirmée par réception des
+  messages et journaux de collage/Entrée. Filtrage des interjections ajouté ensuite.
 - Tests des outils, du tunnel, des protections HTTP, du chronomètre et de la segmentation réussis.
 - Optimisation VNC vérifiée sur un flux réel de 3024 × 1964 : première image
   de 422 584 octets, puis mises à jour de 16 782, 3 776 et 4 octets lorsque
