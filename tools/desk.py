@@ -13,6 +13,7 @@ from pathlib import Path
 
 
 PACKAGES = {"moonlight": "com.limelight", "metrics": "com.spop.poverlay"}
+ACTIVITIES = {"moonlight": ".PcView", "metrics": ".MainActivity"}
 TIMEOUT = 10
 
 
@@ -61,7 +62,7 @@ def parse_devices(output):
 def select_device(devices, serial=None):
     if serial is None:
         if not devices:
-            raise DeskError("Aucun appareil ADB connecté. Brancher et autoriser le Bike.")
+            raise DeskError("Aucun appareil ADB connecté. Connecter et autoriser le Bike en Wi-Fi ou USB.")
         if len(devices) != 1:
             raise DeskError("Plusieurs appareils ADB : préciser --serial.")
         serial = next(iter(devices))
@@ -158,9 +159,9 @@ def launch_host(args):
 
 def launch_bike(args):
     package = PACKAGES[args.app]
+    # This Bike's firmware rejects package-scoped launcher intents; explicit activities work.
     command = ["adb", "-s", args.serial, "shell", "am", "start", "-W",
-               "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER",
-               "-p", package]
+               "-n", f"{package}/{ACTIVITIES[args.app]}"]
     if args.dry_run:
         print(shlex.join(command))
         return 0

@@ -66,12 +66,15 @@ Ajouter `--dry-run` pour afficher une commande sans contacter le Bike.
 Suivre [le guide de configuration](docs/setup.md), puis
 [le scénario de validation](docs/validation.md).
 
-État à la création du dépôt :
+État vérifié le 16 octobre 2026 :
 
 - Mac Apple Silicon, macOS 26.7.1.
 - VoiceInk et ADB détectés.
-- Sunshine non détecté dans les dossiers d’applications standards ni dans le PATH.
-- Aucun appareil ADB connecté : modèle d’écran et version Android encore inconnus.
+- Sunshine 2026.914.233613 installé dans `/Applications/Sunshine.app` ; service local démarré.
+- Bike PLTN-RB1VQ connecté par ADB sans fil, Android 11 / API 30.
+- Moonlight 12.2 et Grupetto v0.0.43 installés depuis leurs versions officielles ; SHA-256 vérifiés.
+- Moonlight ouvert avec succès via son activité explicite ; le lancement implicite échoue sur ce firmware.
+- Le diagnostic détecte tous les prérequis ; les autorisations et l’appairage Sunshine/Moonlight restent à configurer.
 - Aucun test de streaming, de dictée à distance ou d’overlay effectué sur le Bike.
 
 Les rapports personnels peuvent être conservés dans `.local/`, exclu de Git :

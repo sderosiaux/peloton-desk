@@ -34,6 +34,27 @@ tenter la connexion manuelle avec les coordonnées de l’écran.
 Sources : [Android ADB sans fil](https://developer.android.com/tools/adb#connect-to-a-device-over-wi-fi),
 [appairage OpenPelo](https://github.com/doudar/Openpelo#connect-a-device).
 
+### Si ADB échoue alors que le port répond
+
+Sur ce Mac, `adb pair` renvoyait `protocol fault (couldn't read status message)`.
+Le journal du serveur ADB indiquait `No route to host`, alors que `nc -vz IP PORT`
+réussissait. L'échec se produisait avant la vérification du code. Un échec Python
+ne suffisait donc pas à conclure que le Bike était inaccessible.
+
+La relance du serveur depuis le Terminal du Mac, déjà autorisé à accéder au réseau
+local, a permis l'appairage et la connexion automatique :
+
+```sh
+adb kill-server
+adb start-server
+```
+
+Exécuter ces commandes dans ce Terminal, puis reprendre `adb pair` avec les
+coordonnées affichées sur le Bike. `kill-server` interrompt les sessions ADB en cours.
+Ne pas relancer ensuite le serveur depuis l'environnement qui échouait.
+Ce comportement est compatible avec les problèmes d'autorisation réseau des
+processus en arrière-plan [décrits par Apple](https://developer.apple.com/forums/thread/778457).
+
 ### USB
 
 Si l’appairage sans fil n’est pas disponible, activer **USB debugging**, utiliser
