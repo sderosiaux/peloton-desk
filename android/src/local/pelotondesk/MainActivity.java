@@ -18,6 +18,7 @@ import android.net.Uri;
 public class MainActivity extends Activity {
     private WebView web;
     private BikeSensors sensors;
+    private volatile boolean autoDesktop;
     private final Handler handler = new Handler();
     private static final String URL = "http://127.0.0.1:8765/";
     private final Runnable retry = () -> web.loadUrl(URL);
@@ -27,6 +28,7 @@ public class MainActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         saveToken(getIntent());
+        autoDesktop = getIntent().getBooleanExtra("desktop", false);
         sensors = new BikeSensors(this);
         web = new WebView(this);
         web.setBackgroundColor(0xfff5f4ef);
@@ -56,11 +58,28 @@ public class MainActivity extends Activity {
         if (token != null && token.matches("[A-Za-z0-9_-]{30,100}"))
             getPreferences(MODE_PRIVATE).edit().putString("token", token).apply();
     }
-    @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); saveToken(intent); web.loadUrl(URL); }
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        String previousToken = getPreferences(MODE_PRIVATE).getString("token", "");
+        setIntent(intent); saveToken(intent);
+        autoDesktop = intent.getBooleanExtra("desktop", false);
+        if (!previousToken.equals(getPreferences(MODE_PRIVATE).getString("token", ""))) {
+            web.loadUrl(URL);
+        } else if (autoDesktop) {
+            // Preserve a live desktop connection when bringing the app forward.
+            web.evaluateJavascript("(function(){if(window.DeskOpenDesktop){window.DeskOpenDesktop();return true;}return false;})()", result -> {
+                if ("true".equals(result)) autoDesktop=false;
+                else web.loadUrl(URL);
+            });
+        }
+    }
     @Override protected void onPause() { super.onPause(); web.evaluateJavascript("window.DeskPause&&window.DeskPause()", null); }
     @Override protected void onDestroy() { handler.removeCallbacks(retry); sensors.stop(); web.destroy(); super.onDestroy(); }
     private class Bridge {
         @JavascriptInterface public String connectionToken() { return getPreferences(MODE_PRIVATE).getString("token", ""); }
         @JavascriptInterface public String metrics() { return sensors.json(); }
+        @JavascriptInterface public boolean shouldOpenDesktop() {
+            boolean requested=autoDesktop; autoDesktop=false; return requested;
+        }
     }
 }

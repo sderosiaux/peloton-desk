@@ -2,6 +2,7 @@ import AppKit
 import AVFoundation
 import ApplicationServices
 import Foundation
+import ServiceManagement
 
 let outputLock = NSLock()
 func emit(_ value: [String: Any]) {
@@ -203,44 +204,135 @@ final class Recorder {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var item: NSStatusItem!, server: Process?
+    var launcher: Process?, openItem: NSMenuItem!, statusItem: NSMenuItem!, loginItem: NSMenuItem!
+    var signalSource: DispatchSourceSignal?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         item=NSStatusBar.system.statusItem(withLength:NSStatusItem.variableLength)
         item.button?.title="PD"
+        item.button?.toolTip="Peloton Desk — ouvrir le bureau sur le Bike"
         let menu=NSMenu()
+        menu.autoenablesItems=false
         let title=NSMenuItem(title:"Peloton Desk · compagnon Mac",action:nil,keyEquivalent:"");title.isEnabled=false;menu.addItem(title)
+        openItem=NSMenuItem(title:"Ouvrir le bureau sur le Bike",action:#selector(openBike),keyEquivalent:"d")
+        menu.addItem(openItem)
+        statusItem=NSMenuItem(title:"Prêt",action:nil,keyEquivalent:"");statusItem.isEnabled=false;menu.addItem(statusItem)
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title:"Autorisations de dictée…",action:#selector(permissions),keyEquivalent:""))
+        loginItem=NSMenuItem(title:"Démarrer avec le Mac",action:#selector(toggleLogin),keyEquivalent:"")
+        menu.addItem(loginItem)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title:"Quitter Peloton Desk",action:#selector(quit),keyEquivalent:"q"))
         for option in menu.items { option.target=self };item.menu=menu
-        startServer()
+        updateLoginItem()
+        signal(SIGTERM,SIG_IGN)
+        signalSource=DispatchSource.makeSignalSource(signal:SIGTERM,queue:.main)
+        signalSource?.setEventHandler { [weak self] in self?.quit() }
+        signalSource?.resume()
+        openDesktop(showErrors:false)
     }
-    func startServer() {
-        guard let root=Bundle.main.object(forInfoDictionaryKey:"PDProjectRoot") as? String else { return }
+
+    func configuration() throws -> (URL,String) {
+        guard let root=Bundle.main.object(forInfoDictionaryKey:"PDProjectRoot") as? String else {
+            throw NSError(domain:"Installation incomplète",code:1)
+        }
+        let base=URL(fileURLWithPath:root)
+        let connection=try JSONSerialization.jsonObject(with:Data(contentsOf:base.appendingPathComponent(".local/connection.json"))) as? [String:String]
+        guard let serial=connection?["serial"], !serial.isEmpty else { throw NSError(domain:"Bike non configuré",code:1) }
+        return (base,serial)
+    }
+
+    var environment: [String:String] {
+        var value=ProcessInfo.processInfo.environment
+        value["PATH"]="/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        value["PELOTON_DESK_HELPER"]=Bundle.main.executableURL?.path
+        return value
+    }
+
+    func startServer(base:URL,serial:String) throws {
+        if server?.isRunning == true { return }
+        let process=Process();process.executableURL=base.appendingPathComponent(".venv/bin/python")
+        process.arguments=[base.appendingPathComponent("macos/companion.py").path,"--serial",serial,"--no-open"]
+        process.environment=environment
+        let log=base.appendingPathComponent(".local/companion.log")
+        FileManager.default.createFile(atPath:log.path,contents:nil,attributes:[.posixPermissions:0o600])
+        let handle=try FileHandle(forWritingTo:log)
+        defer { try? handle.close() }
+        process.standardOutput=handle;process.standardError=handle
+        process.terminationHandler = { [weak self] finished in
+            DispatchQueue.main.async {
+                guard let self=self, self.server === finished else { return }
+                self.statusItem.title="Compagnon arrêté — cliquez pour relancer"
+            }
+        }
+        server=process
+        try process.run()
+    }
+
+    @objc func openBike() { openDesktop(showErrors:true) }
+
+    func openDesktop(showErrors:Bool) {
+        guard launcher == nil else { return }
         do {
-            let base=URL(fileURLWithPath:root)
-            let connection=try JSONSerialization.jsonObject(with:Data(contentsOf:base.appendingPathComponent(".local/connection.json"))) as? [String:String]
-            guard let serial=connection?["serial"] else { throw NSError(domain:"Bike non configuré",code:1) }
+            let (base,serial)=try configuration()
+            try startServer(base:base,serial:serial)
             let process=Process();process.executableURL=base.appendingPathComponent(".venv/bin/python")
-            process.arguments=[base.appendingPathComponent("macos/companion.py").path,"--serial",serial]
-            var environment=ProcessInfo.processInfo.environment
-            environment["PATH"]="/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-            environment["PELOTON_DESK_HELPER"]=Bundle.main.executableURL?.path
+            process.arguments=[base.appendingPathComponent("tools/app.py").path,"open","--serial",serial]
             process.environment=environment
-            let log=base.appendingPathComponent(".local/companion.log")
-            FileManager.default.createFile(atPath:log.path,contents:nil,attributes:[.posixPermissions:0o600])
-            let handle=try FileHandle(forWritingTo:log)
-            process.standardOutput=handle;process.standardError=handle
-            try process.run();server=process
-        } catch { let alert=NSAlert();alert.messageText="Le compagnon n’a pas pu démarrer.";alert.informativeText="Vérifiez que le Bike est connecté et que l’installation est terminée.";alert.runModal() }
+            let pipe=Pipe();process.standardOutput=pipe;process.standardError=pipe
+            process.terminationHandler = { [weak self] finished in
+                let output=String(data:pipe.fileHandleForReading.readDataToEndOfFile(),encoding:.utf8)?.trimmingCharacters(in:.whitespacesAndNewlines) ?? ""
+                DispatchQueue.main.async {
+                    guard let self=self else { return }
+                    self.launcher=nil;self.openItem.isEnabled=true
+                    let success=finished.terminationStatus==0 && self.server?.isRunning==true
+                    self.statusItem.title=success ? "Bureau ouvert sur le Bike" : "Bike non connecté — réessayer"
+                    if !success && showErrors {
+                        self.showError(output.isEmpty ? "Allumez le Bike et vérifiez le Wi-Fi et Wireless debugging." : output)
+                    }
+                }
+            }
+            launcher=process;openItem.isEnabled=false;statusItem.title="Connexion au Bike…"
+            try process.run()
+        } catch {
+            launcher=nil;openItem.isEnabled=true;statusItem.title="Installation à vérifier"
+            if showErrors { showError("Vérifiez que l’installation de Peloton Desk est terminée.") }
+        }
     }
+
+    func applicationShouldHandleReopen(_ sender:NSApplication,hasVisibleWindows:Bool) -> Bool {
+        openDesktop(showErrors:true)
+        return false
+    }
+
+    func showError(_ message:String) {
+        let alert=NSAlert();alert.messageText="Peloton Desk";alert.informativeText=message;alert.runModal()
+    }
+
+    func updateLoginItem() {
+        loginItem.state=SMAppService.mainApp.status == .enabled ? .on : .off
+    }
+
+    @objc func toggleLogin() {
+        do {
+            if SMAppService.mainApp.status == .enabled { try SMAppService.mainApp.unregister() }
+            else { try SMAppService.mainApp.register() }
+            updateLoginItem()
+            if SMAppService.mainApp.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
+        } catch { showError("Le démarrage automatique n’a pas pu être modifié. Vérifiez Réglages Système → Général → Ouverture et extensions.") }
+    }
+
     @objc func permissions() {
         let options=[kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String:true] as CFDictionary
         _=AXIsProcessTrustedWithOptions(options)
         AVCaptureDevice.requestAccess(for:.audio) { _ in }
     }
-    @objc func quit() { server?.terminate(); NSApp.terminate(nil) }
-    func applicationWillTerminate(_ notification:Notification) { server?.terminate() }
+    @objc func quit() { NSApp.terminate(nil) }
+    func applicationWillTerminate(_ notification:Notification) {
+        if launcher?.isRunning == true { launcher?.terminate() }
+        if server?.isRunning == true { server?.terminate() }
+    }
 }
 
 let args=CommandLine.arguments

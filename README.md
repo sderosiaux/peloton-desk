@@ -7,6 +7,19 @@ Le compagnon **Peloton Desk Mac** se trouve dans la barre des menus (`PD`).
 L’app Android utilise le partage d’écran intégré au Mac, avec noVNC embarqué.
 Moonlight, Sunshine, Grupetto et VoiceInk ne sont pas nécessaires à ce parcours.
 
+## Usage quotidien
+
+Sur le Mac, cliquer **PD → Ouvrir le bureau sur le Bike**. Le compagnon rétablit
+le tunnel, retrouve le Bike appairé si son adresse Wi-Fi a changé, et affiche
+le bureau. Une connexion déjà active est conservée ; sinon le mot de passe VNC
+est demandé sur le Bike. Aucun Terminal n’est nécessaire.
+
+Cocher **PD → Démarrer avec le Mac** pour retrouver ce menu après ouverture de
+session macOS. Cette option est désactivée tant que vous ne la cochez pas.
+Le Bike doit être allumé, sur le même réseau, avec Wireless debugging actif.
+Si le Bike est éteint au démarrage du Mac, le compagnon reste disponible : utiliser
+le bouton après avoir allumé le vélo.
+
 ## Premier lancement
 
 1. Garder le Bike connecté par ADB sans fil et ouvrir **Peloton Desk Mac**.

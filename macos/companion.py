@@ -5,9 +5,7 @@ import contextlib
 import hmac
 import json
 import os
-import secrets
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -227,29 +225,16 @@ def create_app(token, origin=f'http://127.0.0.1:{PORT}'):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--serial', required=True)
+    parser.add_argument('--no-open', action='store_true')
     args = parser.parse_args()
     sys.path.insert(0, str(ROOT / 'tools'))
-    from desk import run, select_device, parse_devices
-    serial = select_device(parse_devices(run(['adb', 'devices', '-l'])), args.serial)
-    token_file = ROOT / '.local/connection-token'
-    if not token_file.exists():
-        descriptor = os.open(token_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(descriptor, 'w') as stream:
-            stream.write(secrets.token_urlsafe(32))
-    token_file.chmod(0o600)
-    token = token_file.read_text().strip()
-    run(['adb', '-s', serial, 'reverse', f'tcp:{PORT}', f'tcp:{PORT}'])
-    # The token goes only to the paired device; do not log the command or token.
-    # Do not wait for the first frame: the WebView needs this server to start.
-    # Keep subprocess errors private too: their default repr includes the token.
-    try:
-        result = subprocess.run(['adb', '-s', serial, 'shell', 'am', 'start', '-n',
-            'local.pelotondesk/.MainActivity', '--es', 'token', token],
-            capture_output=True, text=True, timeout=30)
-        if result.returncode or 'Error:' in result.stdout + result.stderr:
-            raise RuntimeError('Android launch failed')
-    except (subprocess.SubprocessError, OSError, RuntimeError):
-        print('Ouverture automatique du Bike impossible. Ouvrez Peloton Desk sur son écran.', flush=True)
+    from bike import connection_token, open_desktop, DeskError
+    token = connection_token()
+    if not args.no_open:
+        try:
+            open_desktop(args.serial, auto_connect=False)
+        except DeskError:
+            print('Bike non connecté. Utilisez PD → Ouvrir le bureau sur le Bike.', flush=True)
     print('Peloton Desk ready. Gateway bound to 127.0.0.1 only.', flush=True)
     web.run_app(create_app(token), host='127.0.0.1', port=PORT, access_log=None, print=None)
 

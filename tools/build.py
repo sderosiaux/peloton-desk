@@ -59,7 +59,7 @@ def mac():
             'NSMicrophoneUsageDescription': 'Transcrire localement votre voix quand vous activez la dictée sur le Bike.'}
     (contents / 'Info.plist').write_bytes(plistlib.dumps(info))
     run('swiftc', '-swift-version', '5', '-O', '-framework', 'AppKit', '-framework', 'AVFoundation',
-        '-framework', 'ApplicationServices', ROOT / 'macos/Companion.swift', '-o', binary)
+        '-framework', 'ApplicationServices', '-framework', 'ServiceManagement', ROOT / 'macos/Companion.swift', '-o', binary)
     run('codesign', '--force', '--sign', '-', app)
     print(app)
 

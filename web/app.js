@@ -3,7 +3,7 @@ import { passwordDesktop } from './desktop.mjs';
 import { elapsed, toggle, formatDuration } from './session.mjs';
 const PasswordDesktop = passwordDesktop(RFB);
 const $ = id => document.getElementById(id);
-let rfb, status = {}, voiceActive = false, eventSocket, noticeTimer, pendingText = '';
+let rfb, status = {}, voiceActive = false, eventSocket, noticeTimer, pendingText = '', desktopConnected = false;
 let timer = { elapsed: Number(localStorage.getItem('elapsed') || 0), running: false, started: 0 };
 const origin = location.origin, wsOrigin = origin.replace(/^http/, 'ws');
 function notice(message) { $('notice').textContent=message; $('notice').hidden=false; clearTimeout(noticeTimer); noticeTimer=setTimeout(()=>$('notice').hidden=true,6500); }
@@ -16,16 +16,17 @@ async function authenticate() {
   if (token) { await api('auth',{token}); history.replaceState(null,'','/'); }
 }
 function openDesktop() {
+  if (desktopConnected) return;
   if (!status.vncAvailable) { notice('Activez le partage d’écran sur le Mac.'); return; }
   if (rfb) { rfb.removeEventListener('disconnect', disconnected); rfb.disconnect(); }
   rfb = new PasswordDesktop($('desktop'),wsOrigin+'/vnc');
   rfb.scaleViewport=true; rfb.resizeSession=false; rfb.showDotCursor=true; rfb.qualityLevel=7; rfb.compressionLevel=2;
   rfb.addEventListener('credentialsrequired',()=>{ if(!$('password-dialog').open)$('password-dialog').showModal(); $('password').focus(); });
-  rfb.addEventListener('connect',()=>{ $('welcome').hidden=true; $('password-dialog').close(); notice('Bureau connecté. Touchez un champ pour écrire.'); });
+  rfb.addEventListener('connect',()=>{ desktopConnected=true; $('welcome').hidden=true; $('password-dialog').close(); notice('Bureau connecté. Touchez un champ pour écrire.'); });
   rfb.addEventListener('securityfailure',()=>notice('Mot de passe refusé. Vérifiez le mot de passe du partage d’écran.'));
   rfb.addEventListener('disconnect',disconnected);
 }
-function disconnected(){ $('password-dialog').close(); $('welcome').hidden=false; $('connection-detail').textContent='La connexion au bureau est interrompue.'; $('connect').hidden=false; stopVoice(); }
+function disconnected(){ desktopConnected=false; $('password-dialog').close(); $('welcome').hidden=false; $('connection-detail').textContent='La connexion au bureau est interrompue.'; $('connect').hidden=false; stopVoice(); }
 $('password-form').addEventListener('submit',e=>{ e.preventDefault(); rfb?.sendCredentials({password:$('password').value}); $('password').value=''; $('password-dialog').close(); });
 $('password-cancel').onclick=()=>{ $('password-dialog').close(); rfb?.disconnect(); };
 $('connect').onclick=openDesktop;
@@ -33,7 +34,7 @@ $('session').onclick=()=>{ timer=toggle(timer,performance.now()); $('session-ico
 setInterval(()=>{ const ms=elapsed(timer,performance.now()); $('duration').textContent=formatDuration(ms); localStorage.setItem('elapsed',Math.round(ms)); },500);
 $('settings').onclick=()=>$('settings-dialog').showModal();
 $('close-settings').onclick=()=>$('settings-dialog').close();
-$('reconnect').onclick=()=>{ $('settings-dialog').close(); openDesktop(); };
+$('reconnect').onclick=()=>{ $('settings-dialog').close(); stopVoice(); desktopConnected=false; openDesktop(); };
 $('reset-timer').onclick=()=>{timer={elapsed:0,running:false,started:0};$('session-icon').textContent='▶';$('session').setAttribute('aria-label','Démarrer la session');$('duration').textContent='00:00';localStorage.setItem('elapsed','0');$('settings-dialog').close();};
 $('insert-pending').onclick=()=>{
   if(!rfb || !$('welcome').hidden){notice('Connectez le bureau et sélectionnez un champ de texte.');return;}
@@ -60,9 +61,10 @@ function metrics(){
 async function refreshStatus(){
   try{status=await api('status');$('voice-status').textContent=status.voiceDetail;$('connect').hidden=!status.vncAvailable;
     if(!$('welcome').hidden)$('connection-detail').textContent=status.vncAvailable?'Votre Mac est prêt.':'Sur le Mac : Réglages Système → Général → Partage → Partage d’écran. Activez l’accès VNC avec un mot de passe dédié.';
-  }catch(e){$('connection-detail').textContent=e.message;$('connect').hidden=true;}
+  }catch(e){status.vncAvailable=false;$('connection-detail').textContent=e.message;$('connect').hidden=true;}
 }
-async function main(){try{await authenticate();await refreshStatus();voiceEvents();}catch(e){$('connection-detail').textContent=e.message;}metrics();setInterval(metrics,500);setInterval(refreshStatus,5000);}
+async function main(){try{await authenticate();await refreshStatus();voiceEvents();if(window.DeskDevice?.shouldOpenDesktop())openDesktop();}catch(e){$('connection-detail').textContent=e.message;}metrics();setInterval(metrics,500);setInterval(refreshStatus,5000);}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)stopVoice();});
 window.DeskPause=stopVoice;
+window.DeskOpenDesktop=async()=>{if(desktopConnected)return;await refreshStatus();openDesktop();};
 main();

@@ -7,6 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 from desk import DeskError, run, installed, parse_devices, select_device
+from bike import open_desktop
 
 ROOT = Path(__file__).resolve().parents[1]
 LOCAL = ROOT / '.local'
@@ -57,9 +58,14 @@ def main():
     sub = parser.add_subparsers(dest='action', required=True)
     command = sub.add_parser('install'); command.add_argument('--serial', required=True)
     command = sub.add_parser('doctor'); command.add_argument('--serial')
+    command = sub.add_parser('open'); command.add_argument('--serial', required=True)
     args = parser.parse_args()
     try:
         if args.action == 'install': install(args); return 0
+        if args.action == 'open':
+            open_desktop(args.serial)
+            print('Bureau ouvert sur le Bike.')
+            return 0
         return doctor(args)
     except (DeskError, OSError, ValueError, subprocess.SubprocessError) as exc:
         print('Erreur : ' + str(exc), file=sys.stderr); return 2

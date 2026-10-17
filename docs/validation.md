@@ -11,6 +11,9 @@ Conserver les résultats personnels dans `.local/validation.md`.
 - [x] Inscription au service de capteurs et premier échantillon réel reçu.
 - [x] Inférence Whisper sur un audio public, sans utiliser le micro.
 - [x] Tests des outils, tunnel binaire, origine/authentification HTTP, chronomètre et segmentation.
+- [x] Raccourci de lancement installé : la commande utilisée par le menu PD ouvre le Bike réel.
+- [x] Tests de reconnexion TLS, identité du Bike, erreur Android et absence de fuite du jeton.
+- [ ] Clic manuel sur le menu PD et ouverture automatique à la prochaine session Mac.
 
 ## Bureau et tactile
 
