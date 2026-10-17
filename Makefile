@@ -3,6 +3,9 @@ VOICE_APP ?= VoiceInk
 
 .PHONY: doctor doctor-json plan host test app-build app-install app-doctor app-test
 
+asr-build:
+	$(PYTHON) tools/build.py parakeet
+
 app-build:
 	npm run build
 	$(PYTHON) tools/build.py mac

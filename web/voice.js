@@ -1,0 +1,21 @@
+const $=id=>document.getElementById(id);
+let active=false, finishing=false, preparing=false, socket, connected=false, previewPhrase=0, lastMessage='';
+const transcripts=new Map();
+async function api(path,body){const response=await fetch('/api/'+path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});const data=await response.json();if(!response.ok)throw new Error(data.error||'Connexion interrompue.');return data;}
+function controls(){ $('start').disabled=!connected||finishing||preparing;$('start').textContent=preparing?'Préparation…':finishing?'Fin de transcription…':active?'Terminer la dictée':'Démarrer la dictée';$('cancel').hidden=!active&&!finishing&&!preparing; }
+function event(data){
+  if(data.type==='voice-state'){active=data.active;finishing=data.phase==='finishing';preparing=data.phase==='starting';controls();if(data.microphone)$('microphone').textContent=data.microphone;if(data.model)$('model').textContent=data.model+' · LOCAL';$('stage').textContent=preparing?'Préparation du micro et du modèle…':finishing?'Micro arrêté · dernière phrase en cours…':active?'À l’écoute · sélectionnez votre champ et parlez.':lastMessage||'Micro arrêté.';if(!active)$('level').value=-60;}
+  if(data.type==='audio-level'){const db=20*Math.log10(Math.max(data.rms,0.000001));$('level').value=Math.max(-60,db);$('db').textContent=Math.round(db)+' dB';}
+  if(data.type==='voice-stage'||data.type==='error'||data.type==='notice')$('stage').textContent=lastMessage=data.message;
+  if(data.type==='transcription-preview'){previewPhrase=data.phraseId;$('preview-text').textContent=data.text;$('preview').hidden=false;$('preview-text').scrollTop=$('preview-text').scrollHeight;}
+  if(data.type==='voice-state'&&data.phase==='idle')$('preview').hidden=true;
+  if(data.type==='transcription'){if(data.phraseId>=previewPhrase)$('preview').hidden=true;if(data.text){transcripts.set(data.id,{text:data.text,at:data.at});for(const [id,item] of transcripts)if(Date.now()/1000-item.at>=600)transcripts.delete(id);while(transcripts.size>20)transcripts.delete(transcripts.keys().next().value);$('transcript').value=[...transcripts.values()].map(x=>x.text).join('\n\n');$('copy').disabled=false;}$('stage').textContent=lastMessage=data.message;}
+}
+function connect(){socket=new WebSocket(location.origin.replace(/^http/,'ws')+'/events?source=mac');socket.onopen=()=>{connected=true;controls();};socket.onmessage=e=>event(JSON.parse(e.data));socket.onclose=()=>{connected=false;active=false;finishing=false;preparing=false;controls();$('stage').textContent='Compagnon déconnecté · nouvelle tentative…';setTimeout(connect,2000);};}
+$('start').onclick=async()=>{try{$('start').disabled=true;if(active){await api('voice/finish',{});}else{lastMessage='';$('stage').textContent='Démarrage du micro…';await api('voice/start',{source:'mac'});}}catch(e){preparing=false;$('stage').textContent=e.message;controls();}};
+window.stopDictation=$('cancel').onclick=async()=>{try{await api('voice/stop',{source:'mac'});}catch(e){$('stage').textContent=e.message;}};
+$('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('transcript').value);$('stage').textContent='Texte copié.';}catch{$('transcript').focus();$('transcript').select();$('stage').textContent='Texte sélectionné · utilisez ⌘C pour copier.';}};
+window.addEventListener('pagehide',()=>{if(active||finishing||preparing)fetch('/api/voice/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:'mac'}),keepalive:true}).catch(()=>{});});
+async function main(){try{const token=new URLSearchParams(location.hash.slice(1)).get('token');if(token){await api('auth',{token});history.replaceState(null,'',location.pathname);}const status=await api('status');$('model').textContent=status.voiceModel+' · LOCAL';connect();}catch(e){$('stage').textContent=e.message;}}
+setInterval(()=>{let changed=false;for(const [id,item] of transcripts)if(Date.now()/1000-item.at>=600){transcripts.delete(id);changed=true;}if(changed){$('transcript').value=[...transcripts.values()].map(x=>x.text).join('\n\n');$('copy').disabled=!transcripts.size;}},1000);
+main();

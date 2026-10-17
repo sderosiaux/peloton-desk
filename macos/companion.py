@@ -6,6 +6,8 @@ import hmac
 import json
 import os
 import shutil
+import signal
+from collections import deque
 import sys
 import time
 from pathlib import Path
@@ -13,9 +15,9 @@ from pathlib import Path
 from aiohttp import web, WSMsgType
 
 try:
-    from .vnc import fast_desktop, ProtocolError
+    from .vnc import fast_desktop, ProtocolError, ClientUpdates
 except ImportError:  # Direct execution by the native companion.
-    from vnc import fast_desktop, ProtocolError
+    from vnc import fast_desktop, ProtocolError, ClientUpdates
 
 ROOT = Path(__file__).resolve().parents[1]
 PORT = 8765
@@ -29,33 +31,85 @@ class Voice:
     def __init__(self, app):
         self.app, self.process, self.reader = app, None, None
         self.lifecycle = asyncio.Lock()
+        self.source = 'bike'
+        self.state = {'type': 'voice-state', 'active': False, 'phase': 'idle'}
+        self.history = deque(maxlen=20)
+        self.sequence = 0
+        self.finisher = None
+        self.cancel_start = False
+
+    def config(self):
+        config_path = ROOT / '.local/voice.json'
+        return json.loads(config_path.read_text()) if config_path.exists() else {}
 
     def paths(self):
-        config_path = ROOT / '.local/voice.json'
-        config = json.loads(config_path.read_text()) if config_path.exists() else {}
+        config = self.config()
+        engine = config.get('worker') if config.get('engine') == 'parakeet' else config.get('whisper')
         return (Path(os.environ.get('PELOTON_DESK_HELPER', ROOT / '.local/Peloton Desk Mac.app/Contents/MacOS/PelotonDesk')),
-                Path(config.get('whisper', shutil.which('whisper-cli') or '/opt/homebrew/bin/whisper-cli')),
+                Path(engine or shutil.which('whisper-cli') or '/opt/homebrew/bin/whisper-cli'),
                 Path(config.get('model', ROOT / '.local/models/ggml-base.bin')))
 
     async def emit(self, event):
+        if event['type'] == 'voice-state':
+            self.state = event
+        if event['type'] == 'transcription':
+            self.sequence += 1
+            event = dict(event, id=self.sequence, at=time.time())
+            self.history.append(event)
+            asyncio.get_running_loop().call_later(600, self.expire_history)
+        if event['type'] not in ('audio-level', 'transcription-preview'):
+            # Deliberately omit transcript, audio, paths and credentials from disk logs.
+            record = {key: event[key] for key in ('type', 'phase', 'active', 'targetFound', 'inserted', 'audioSeconds', 'elapsedMs', 'code') if key in event}
+            record['at'] = time.time()
+            if 'text' in event: record['characters'] = len(event['text'])
+            print(json.dumps(record, ensure_ascii=False), flush=True)
         for client in tuple(self.app[CLIENTS]):
             with contextlib.suppress(ConnectionError, RuntimeError):
                 await client.send_json(event)
 
-    async def start(self):
+    def expire_history(self):
+        while self.history and time.time() - self.history[0]['at'] >= 600:
+            self.history.popleft()
+
+    async def start(self, source='bike'):
         async with self.lifecycle:
-            await self._start()
+            if self.process and self.source != source:
+                raise web.HTTPConflict(text=json.dumps({'error': 'La dictée est déjà utilisée sur l’autre écran.'}), content_type='application/json')
+            self.source = source
+            self.cancel_start = False
+            try:
+                await self._start()
+            except Exception:
+                await self.emit({'type': 'voice-state', 'active': False, 'phase': 'idle'})
+                raise
 
     async def _start(self):
         if self.process and self.process.returncode is None:
             return
         binary, whisper, model = self.paths()
-        if not all(p.is_file() for p in (binary, whisper, model)):
+        if not all(p.exists() for p in (binary, whisper, model)):
             raise web.HTTPConflict(text=json.dumps({'error': 'Le moteur de dictée locale doit encore être installé sur le Mac.'}), content_type='application/json')
         if not self.app[CLIENTS]:
             raise web.HTTPConflict(text=json.dumps({'error': 'Reconnectez Peloton Desk avant d’activer le micro.'}), content_type='application/json')
+        await self.emit({'type': 'voice-state', 'active': False, 'phase': 'starting'})
+        parent = int(os.environ.get('PELOTON_DESK_APP_PID', '0'))
+        if parent and parent == os.getppid():
+            # The menu app owns the permission prompt and status snapshot.
+            os.kill(parent, signal.SIGUSR2)
+            for _ in range(150):
+                if self.cancel_start: return
+                try:
+                    permissions = json.loads((ROOT / '.local/permissions.json').read_text())
+                    microphone = permissions['microphone']
+                    if microphone == 'authorized': break
+                    if microphone in ('denied', 'restricted'):
+                        raise web.HTTPConflict(text=json.dumps({'error': 'Autorisez le micro pour Peloton Desk Mac dans les réglages macOS.'}), content_type='application/json')
+                except (OSError, ValueError, KeyError): pass
+                await asyncio.sleep(0.2)
+            else:
+                raise web.HTTPConflict(text=json.dumps({'error': 'Terminez la demande d’autorisation du micro sur le Mac, puis réessayez.'}), content_type='application/json')
         self.process = await asyncio.create_subprocess_exec(
-            str(binary), '--voice', str(whisper), str(model),
+            str(binary), '--voice-parakeet' if self.config().get('engine') == 'parakeet' else '--voice', str(whisper), str(model),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
         self.reader = asyncio.create_task(self.read_events(self.process))
 
@@ -64,6 +118,7 @@ class Voice:
             async for line in process.stdout:
                 try:
                     event = json.loads(line)
+                    if not isinstance(event, dict) or 'type' not in event: continue
                     await self.emit(event)
                 except (ValueError, UnicodeDecodeError):
                     continue
@@ -71,13 +126,33 @@ class Voice:
         finally:
             if self.process is process:
                 self.process = None
-            await self.emit({'type': 'voice-state', 'active': False})
+            await self.emit({'type': 'voice-state', 'active': False, 'phase': 'idle'})
+
+    async def finish(self):
+        async with self.lifecycle:
+            process = self.process
+            if process and process.returncode is None:
+                with contextlib.suppress(ProcessLookupError): process.send_signal(signal.SIGUSR1)
+                if not self.finisher or self.finisher.done():
+                    self.finisher = asyncio.create_task(self.finish_timeout(process))
+
+    async def finish_timeout(self, process):
+        try:
+            await asyncio.wait_for(asyncio.shield(process.wait()), 60)
+        except asyncio.TimeoutError:
+            await self.emit({'type': 'error', 'message': 'La fin de transcription a dépassé le délai. Réessayez une phrase plus courte.'})
+            if self.process is process: await self.stop()
 
     async def stop(self):
+        self.cancel_start = True
         async with self.lifecycle:
             await self._stop()
+            await self.emit({'type': 'voice-state', 'active': False, 'phase': 'idle'})
 
     async def _stop(self):
+        if self.finisher and self.finisher is not asyncio.current_task():
+            self.finisher.cancel()
+            self.finisher = None
         process = self.process
         if process and process.returncode is None:
             with contextlib.suppress(ProcessLookupError):
@@ -155,9 +230,10 @@ async def status(request):
         available = True
     except (OSError, asyncio.TimeoutError):
         pass
-    ready = all(p.is_file() for p in request.app[VOICE].paths())
+    ready = all(p.exists() for p in request.app[VOICE].paths())
     voice_ready, detail = voice_readiness(ready)
-    return web.json_response({'vncAvailable': available, 'voiceReady': voice_ready, 'voiceDetail': detail})
+    model_name = 'Parakeet V3' if request.app[VOICE].config().get('engine') == 'parakeet' else 'Whisper ' + request.app[VOICE].paths()[2].stem.removeprefix('ggml-')
+    return web.json_response({'vncAvailable': available, 'voiceReady': voice_ready, 'voiceDetail': detail, 'voiceModel': model_name})
 
 
 async def proxy(request):
@@ -168,10 +244,12 @@ async def proxy(request):
     ws = web.WebSocketResponse(protocols=('binary',), max_msg_size=8*1024*1024, heartbeat=20)
     await ws.prepare(request)
     request.app[SOCKETS].add(ws)
+    client_updates = ClientUpdates()
 
     async def upstream():
         async for message in ws:
             if message.type == WSMsgType.BINARY:
+                client_updates.feed(message.data)
                 writer.write(message.data)
                 await writer.drain()
             elif message.type == WSMsgType.ERROR:
@@ -179,7 +257,7 @@ async def proxy(request):
 
     async def downstream():
         if request.query.get('mode') == 'fast':
-            await fast_desktop(reader, ws)
+            await fast_desktop(reader, ws, client_updates)
             return
         while chunk := await reader.read(65536):
             await ws.send_bytes(chunk)
@@ -203,7 +281,8 @@ async def proxy(request):
             await writer.wait_closed()
         await ws.close()
         request.app[SOCKETS].discard(ws)
-        await request.app[VOICE].stop()
+        if request.app[VOICE].source == 'bike':
+            await request.app[VOICE].stop()
     return ws
 
 
@@ -212,23 +291,41 @@ async def events(request):
     await ws.prepare(request)
     request.app[CLIENTS].add(ws)
     request.app[SOCKETS].add(ws)
+    await ws.send_json(request.app[VOICE].state)
+    for event in request.app[VOICE].history:
+        if time.time() - event['at'] < 600: await ws.send_json(dict(event, replayed=True))
     try:
         async for _ in ws:
             pass
     finally:
         request.app[CLIENTS].discard(ws)
         request.app[SOCKETS].discard(ws)
-        await request.app[VOICE].stop()
+        if request.app[VOICE].source == request.query.get('source', 'bike'):
+            await request.app[VOICE].stop()
     return ws
 
 
 async def voice_start(request):
-    await request.app[VOICE].start()
+    data = await request.json()
+    await request.app[VOICE].start('mac' if data.get('source') == 'mac' else 'bike')
     return web.json_response({'ok': True})
 
 
+async def voice_finish(request):
+    await request.app[VOICE].finish()
+    return web.json_response({'ok': True})
+
+
+async def voice_history(request):
+    voice = request.app[VOICE]
+    return web.json_response({'state': voice.state, 'transcripts': [event for event in voice.history if time.time() - event['at'] < 600]})
+
+
 async def voice_stop(request):
-    await request.app[VOICE].stop()
+    data = await request.json()
+    voice = request.app[VOICE]
+    if not data.get('source') or data['source'] == voice.source:
+        await voice.stop()
     return web.json_response({'ok': True})
 
 
@@ -244,13 +341,15 @@ def create_app(token, origin=f'http://127.0.0.1:{PORT}'):
     app[VOICE] = Voice(app)
     app.add_routes([web.post('/api/auth', auth), web.get('/api/status', status),
         web.get('/vnc', proxy), web.get('/events', events),
-        web.post('/api/voice/start', voice_start), web.post('/api/voice/stop', voice_stop)])
+        web.post('/api/voice/start', voice_start), web.post('/api/voice/stop', voice_stop),
+        web.post('/api/voice/finish', voice_finish), web.get('/api/voice/history', voice_history)])
     async def index(request):
-        response = web.FileResponse(ROOT / '.local/web/index.html')
+        response = web.FileResponse(ROOT / '.local/web' / ('voice.html' if request.path == '/voice.html' else 'index.html'))
         response.headers['Content-Security-Policy'] = "default-src 'self'; connect-src 'self' ws://127.0.0.1:8765; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
         response.headers['Cache-Control'] = 'no-store'
         return response
     app.router.add_get('/', index)
+    app.router.add_get('/voice.html', index)
     app.router.add_static('/', ROOT / '.local/web', show_index=False)
     app.on_shutdown.append(cleanup)
     return app

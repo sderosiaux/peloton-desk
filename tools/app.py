@@ -36,12 +36,15 @@ def install(args):
 
 
 def doctor(args):
+    config_path = LOCAL / 'voice.json'
+    config = json.loads(config_path.read_text()) if config_path.exists() else {}
     checks = [
         ('Interface compilée', (LOCAL / 'web/app.js').is_file()),
         ('APK compilé', (LOCAL / 'build/peloton-desk.apk').is_file()),
         ('Compagnon Mac compilé', (LOCAL / 'Peloton Desk Mac.app/Contents/MacOS/PelotonDesk').is_file()),
-        ('Whisper local', shutil.which('whisper-cli') is not None),
-        ('Modèle multilingue', (LOCAL / 'models/ggml-base.bin').is_file()),
+        ('Moteur local Parakeet V3' if config.get('engine') == 'parakeet' else 'Whisper local',
+         Path(config['worker']).is_file() if config.get('engine') == 'parakeet' else shutil.which('whisper-cli') is not None),
+        ('Modèle local', Path(config.get('model', LOCAL / 'models/ggml-base.bin')).exists()),
     ]
     try:
         serial = select_device(parse_devices(run(['adb', 'devices', '-l'])), args.serial)

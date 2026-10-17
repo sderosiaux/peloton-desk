@@ -47,6 +47,18 @@ def android():
     print(apk)
 
 
+def parakeet():
+    command = ['swift', 'build', '--package-path', ROOT / 'macos/parakeet', '--scratch-path', LOCAL / 'build/parakeet', '-c', 'release']
+    run(*command, '--product', 'PelotonDeskASR')
+    folder = Path(subprocess.check_output([str(arg) for arg in command] + ['--show-bin-path'], cwd=ROOT, text=True).strip())
+    destination = LOCAL / 'bin'
+    destination.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(folder / 'PelotonDeskASR', destination / 'PelotonDeskASR')
+    for bundle in folder.glob('*.bundle'):
+        shutil.copytree(bundle, destination / bundle.name, dirs_exist_ok=True)
+    print(destination / 'PelotonDeskASR')
+
+
 def mac():
     app = LOCAL / 'Peloton Desk Mac.app'
     contents = app / 'Contents'
@@ -59,13 +71,14 @@ def mac():
             'NSMicrophoneUsageDescription': 'Transcrire localement votre voix quand vous activez la dictée sur le Bike.'}
     (contents / 'Info.plist').write_bytes(plistlib.dumps(info))
     run('swiftc', '-swift-version', '5', '-O', '-framework', 'AppKit', '-framework', 'AVFoundation',
-        '-framework', 'ApplicationServices', '-framework', 'ServiceManagement', ROOT / 'macos/Companion.swift', '-o', binary)
-    run('codesign', '--force', '--sign', '-', app)
+        '-framework', 'ApplicationServices', '-framework', 'ServiceManagement', '-framework', 'Carbon', '-framework', 'WebKit', ROOT / 'macos/Companion.swift', '-o', binary)
+    from sign_mac import sign
+    sign(app)
     print(app)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('target', choices=('android', 'mac'))
+    parser.add_argument('target', choices=('android', 'mac', 'parakeet'))
     args = parser.parse_args()
-    (android if args.target == 'android' else mac)()
+    {'android': android, 'mac': mac, 'parakeet': parakeet}[args.target]()

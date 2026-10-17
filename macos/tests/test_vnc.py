@@ -108,3 +108,72 @@ class RelayTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class DeltaTests(unittest.TestCase):
+    def setUp(self):
+        self.encoder = FrameEncoder((1024, 768))
+        self.screen = Image.new('RGB', (1024, 768), '#202622')
+        self.header = rectangle(1024, 768, 0)
+        self.encoder.update(self.header, self.screen.tobytes('raw', 'RGBX'))
+
+    def update(self):
+        return self.encoder.update(self.header, self.screen.tobytes('raw', 'RGBX'))
+
+    def test_identical_full_frame_sends_no_pixels(self):
+        self.assertEqual(self.update(), [])
+
+    def test_far_apart_changes_do_not_resend_the_gap(self):
+        self.screen.paste('white', (20, 100, 30, 120))
+        self.screen.paste('red', (900, 600, 910, 620))
+        packets = self.update()
+        self.assertEqual(len(packets), 2)
+        self.assertLess(sum(map(len, packets)), 2000)
+        self.assertEqual([struct.unpack('>HHHH', p[:8]) for p in packets], [(20, 100, 10, 20), (900, 600, 10, 20)])
+        self.assertEqual(self.update(), [])
+
+    def test_changed_terminal_region_is_lossless(self):
+        self.screen.paste('white', (20, 100, 420, 124))
+        packet, = self.update()
+        self.assertEqual(struct.unpack('>i', packet[8:12])[0], -260)
+        self.assertEqual(decode_image(packet).tobytes(), self.screen.crop((20, 100, 420, 124)).tobytes())
+
+    def test_copyrect_updates_cache_even_for_overlapping_scroll(self):
+        self.screen.paste('white', (0, 0, 1024, 10)); self.update()
+        header = struct.pack('>HHHHi', 0, 10, 1024, 758, 1)
+        self.encoder.copy(header, struct.pack('>HH', 0, 0))
+        self.screen.paste(self.screen.crop((0, 0, 1024, 758)), (0, 10))
+        self.assertEqual(self.update(), [])
+
+    def test_unknown_black_pixels_and_forced_refresh_are_sent(self):
+        encoder = FrameEncoder((100, 100))
+        packet = rectangle(10, 10, 0)
+        black = Image.new('RGB', (10, 10)).tobytes('raw', 'RGBX')
+        self.assertEqual(len(encoder.update(packet, black)), 1)
+        self.assertEqual(encoder.update(packet, black), [])
+        encoder.invalidate()
+        self.assertEqual(len(encoder.update(packet, black)), 1)
+        encoder.resize(100, 100)
+        self.assertEqual(len(encoder.update(packet, black)), 1)
+
+    def test_out_of_bounds_rectangles_are_rejected(self):
+        with self.assertRaises(ProtocolError):
+            self.encoder.update(struct.pack('>HHHHi', 1020, 0, 10, 10, 0), bytes(400))
+        with self.assertRaises(ProtocolError):
+            self.encoder.copy(rectangle(10, 10, 1), struct.pack('>HH', 1020, 0))
+
+
+class ClientUpdateTests(unittest.TestCase):
+    def test_fragmented_handshake_input_and_refresh_tracking(self):
+        from macos.vnc import ClientUpdates
+        tracker = ClientUpdates()
+        messages = bytes(30) + struct.pack('>BBHii', 2, 0, 2, 6, 1)
+        messages += struct.pack('>BBHHHH', 3, 0, 0, 0, 1024, 768)
+        messages += struct.pack('>BBHHHH', 3, 1, 0, 0, 1024, 768)
+        messages += b'\x05\x00\x00\x00\x00\x00'
+        messages += b'\x06\x00\x00\x00' + struct.pack('>I', 3) + b'abc'
+        for byte in messages: tracker.feed(bytes((byte,)))
+        self.assertTrue(tracker.enabled)
+        self.assertEqual(tracker.generation, 1)
+        self.assertEqual(tracker.buffer, b'')
+        tracker.feed(b'\xff')
+        self.assertFalse(tracker.enabled)

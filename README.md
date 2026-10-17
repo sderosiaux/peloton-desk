@@ -32,17 +32,26 @@ le bouton après avoir allumé le vélo.
 
 Le menu vérifie les droits réels et devient **Dictée autorisée ✓**, grisé, lorsque
 micro et accessibilité sont accordés. Cela n’active pas le micro : seule la commande
-**Dictée** sur le Bike démarre l’écoute. Si un droit manque, le menu l’indique.
+**Dictée** sur le Bike ou **Démarrer la dictée** dans la fenêtre Mac démarre l’écoute. Si un droit manque, le menu l’indique.
 
-Le bureau utilise par défaut le mode **fluide** : le Mac convertit les images VNC
-en JPEG ou PNG, décodés directement par le navigateur du Bike. Les petites mises
-à jour restent exactes. Le JPEG peut légèrement adoucir le texte ; pour conserver
-tous les pixels, choisir **Image exacte** dans `···`, puis reconnecter le bureau.
+Le bureau utilise par défaut le mode **fluide**. Le Mac compare les pixels avec
+l’image précédente et transmet seulement les zones modifiées. Les petites zones
+restent sans perte ; les grandes images peuvent utiliser JPEG. Le défilement
+réutilise les pixels déjà présents lorsque macOS envoie une commande CopyRect.
+Pour conserver tous les pixels : **Image exacte** dans `···`, puis reconnecter.
 
-Les pauses terminent chaque phrase. L’insertion automatique vérifie que le champ
-sélectionné n’a pas changé ; sinon la transcription reste disponible dans `···`.
-L’envoi du texte reste manuel. Le micro utilisé est l’entrée audio du **Mac** :
-brancher le micro placé près du vélo au Mac, pas à la tablette Peloton.
+La dictée montre un **aperçu provisoire pendant la parole**, rafraîchi environ
+toutes les secondes avec Parakeet V3, toutes les deux secondes avec Whisper si le moteur suit.
+Une pause de 900 ms termine la phrase.
+Le texte final est collé avec ⌘V si le champ sélectionné n’a pas changé ; le
+presse-papiers précédent est ensuite restauré, sauf si vous avez copié autre chose.
+Sans champ reconnu, la transcription reste récupérable. L’envoi reste manuel.
+
+Le menu **Icône vélo → Tester la dictée sur le Mac…** ouvre une fenêtre flottante
+avec niveau du micro, aperçu, phrases reconnues et bouton Copier. Elle fonctionne
+sans le Bike : démarrer, sélectionner son prompt, puis parler. **Terminer** garde
+la dernière phrase ; **Annuler**, fermer la fenêtre ou perdre la connexion annule
+le travail restant. Le micro est toujours celui du **Mac**.
 
 ## État vérifié le 16 octobre 2026
 
@@ -52,14 +61,18 @@ brancher le micro placé près du vélo au Mac, pas à la tablette Peloton.
 - Sunshine retiré du Mac et Moonlight désinstallé du Bike.
 - Interface affichée sur le Bike et bureau Mac en miroir, confirmés par l’utilisateur.
 - Lecture réelle des capteurs : cadence 0, résistance 34 au premier échantillon.
-- Modèle Whisper `base` multilingue vérifié par SHA-256 et testé sur un audio public.
+- Parakeet V3 sélectionné et testé hors ligne sur des fichiers français et anglais ;
+  modèles existants du cache FluidAudio réutilisés. Whisper `base` reste disponible.
+- Audio du micro Mac transcrit lors d’un essai manuel avec Whisper ; autorisations
+  Microphone et Accessibilité reconnues après installation de Parakeet.
 - Tests des outils, du tunnel, des protections HTTP, du chronomètre et de la segmentation réussis.
-- Conversion du flux VNC réel vérifiée : images de 3024 × 1964 décodées après
-  conversion, environ 0,50 Mo par image complète sur le bureau observé, contre
-  environ 1,2 Mo avec le flux ZRLE précédent. Ce n’est pas une mesure de latence tactile.
+- Optimisation VNC vérifiée sur un flux réel de 3024 × 1964 : première image
+  de 422 584 octets, puis mises à jour de 16 782, 3 776 et 4 octets lorsque
+  peu de pixels changent. Ce n’est pas une mesure de latence tactile.
 
 **À valider en usage réel :** précision du toucher, métriques pendant le pédalage,
-micro, insertion dans les applications d’IA et comportement lors des déconnexions.
+insertion et qualité de Parakeet dans les applications d’IA, dernière optimisation
+VNC sur le Bike et comportement lors des déconnexions.
 La vitesse est estimée depuis la puissance, pas mesurée indépendamment.
 
 ## Développement
@@ -89,6 +102,15 @@ Pour choisir un autre modèle ou binaire Whisper, créer `.local/voice.json` :
 {"whisper":"/opt/homebrew/bin/whisper-cli","model":"/chemin/vers/ggml-base.bin"}
 ```
 
+Pour le moteur **Parakeet V3** (Swift 6.2+), compiler `make asr-build`, puis suivre
+[la configuration des modèles](docs/setup.md#modèles). Le compagnon reste indépendant
+de VoiceInk. Whisper reste disponible comme moteur alternatif.
+
+Les builds Mac utilisent une identité locale stable dans `.local/signing/`, ou
+`PELOTON_DESK_SIGN_IDENTITY` si une identité existante est configurée. La clé privée
+ne quitte pas le Mac et ne doit pas être publiée. Une première autorisation macOS
+reste nécessaire lors du passage depuis l’ancienne signature ad hoc.
+
 Consulter [la configuration](docs/setup.md), [les essais matériels](docs/validation.md)
 et [les dépendances tierces](THIRD_PARTY.md).
 Les anciens lanceurs `tools/desk.py` et [le guide Sunshine/Moonlight](docs/legacy-streaming.md)
@@ -103,6 +125,7 @@ conservé par l’app. Garder le Mac éveillé et sa session ouverte.
 
 La dictée utilise un seuil d’énergie sonore simple. Son comportement face au bruit
 du pédalage reste à tester. Les phrases sont limitées à 20 secondes, avec au plus
-deux transcriptions en cours ou en attente. Les extraits audio sont temporaires et
-supprimés après traitement ou arrêt normal. La qualité et le focus doivent être
+trois transcriptions finales en cours ou en attente. Une seule prévisualisation peut être en cours. Les extraits audio sont temporaires et
+supprimés après traitement ou arrêt normal. Les vingt dernières transcriptions restent accessibles dix minutes en mémoire,
+sans fichier d’historique. La qualité et le focus doivent être
 vérifiés avec le micro et les applications réellement utilisés.

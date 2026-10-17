@@ -131,3 +131,57 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class VoiceEventTests(unittest.IsolatedAsyncioTestCase):
+    async def test_transcript_without_target_is_recoverable_and_logs_only_metadata(self):
+        from contextlib import redirect_stdout
+        import io
+        app = create_app('fixture-token')
+        voice = app[VOICE]
+        client = AsyncMock(); app[CLIENTS].add(client)
+        output = io.StringIO()
+        with redirect_stdout(output):
+            await voice.emit({'type':'transcription','text':'Une phrase privée','inserted':False,'targetFound':False})
+        self.assertEqual(voice.history[0]['text'], 'Une phrase privée')
+        self.assertNotIn('Une phrase privée', output.getvalue())
+        self.assertIn('"characters": 17', output.getvalue())
+        voice.history[0]['at'] -= 601
+        voice.expire_history()
+        self.assertFalse(voice.history)
+
+    async def test_finish_flushes_but_disconnect_cancels(self):
+        import signal
+        from unittest.mock import Mock
+        app = create_app('fixture-token')
+        voice = app[VOICE]
+        process = Mock(returncode=None)
+        process.wait = AsyncMock(return_value=0)
+        voice.process = process
+        await voice.finish()
+        process.send_signal.assert_called_once_with(signal.SIGUSR1)
+        process.terminate.assert_not_called()
+        await voice.stop()
+        process.terminate.assert_called_once()
+
+    async def test_cancel_during_permission_prompt_does_not_start_microphone(self):
+        import os
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / '.local').mkdir()
+            (root / '.local/permissions.json').write_text(json.dumps({'microphone':'notDetermined'}))
+            app = create_app('fixture-token')
+            voice = app[VOICE]
+            app[CLIENTS].add(AsyncMock())
+            launch = AsyncMock()
+            with patch('macos.companion.ROOT', root), patch.dict(os.environ, {'PELOTON_DESK_APP_PID':'42'}), \
+                 patch('macos.companion.os.getppid', return_value=42), patch('macos.companion.os.kill') as kill, \
+                 patch.object(voice, 'paths', return_value=(Path(__file__),)*3), \
+                 patch('macos.companion.asyncio.create_subprocess_exec', launch):
+                task = asyncio.create_task(voice.start('mac'))
+                await asyncio.sleep(0.01)
+                await asyncio.wait_for(voice.stop(), 1)
+                await task
+                kill.assert_called_once()
+                launch.assert_not_called()
+                self.assertEqual(voice.state['phase'], 'idle')

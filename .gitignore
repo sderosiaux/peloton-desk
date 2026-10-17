@@ -7,3 +7,6 @@ node_modules/
 *.apk
 *.dmg
 *.log
+
+macos/parakeet/.build/
+macos/parakeet/.swiftpm/

@@ -26,7 +26,13 @@ Conserver les résultats personnels dans `.local/validation.md`.
   de 3024 × 1964 ; environ 511 puis 503 ko transmis après conversion côté Mac.
 - [x] Tests de flux fragmenté, authentification refusée, curseur, couleurs,
   continuité zlib et bornes de taille ; retour au mode exact conservé.
-- [ ] Gain de latence et lisibilité du mode fluide confirmés en usage tactile sur le Bike.
+- [x] Premier gain de fluidité signalé par l’utilisateur ; encore insuffisant pour son usage.
+- [x] Optimisation par différences : flux réel 3024 × 1964, première image 422 584 octets,
+  mises à jour incrémentales 16 782, 3 776 et 4 octets ; rafraîchissement complet
+  explicite 427 060 octets. Mesures côté Mac, sans mesure de latence tactile.
+- [x] Tests : zones éloignées, texte sans perte, images identiques, CopyRect avec
+  chevauchement, pixels inconnus, redimensionnement et demandes de rafraîchissement.
+- [ ] Fluidité et lisibilité de cette dernière optimisation confirmées sur le Bike.
 - [ ] Reconnexion après veille et après interruption d’ADB.
 
 ## Dictée et focus
@@ -34,11 +40,28 @@ Conserver les résultats personnels dans `.local/validation.md`.
 - [x] Autorisations Microphone et Accessibilité reconnues par le compagnon installé.
   Après recompilation, l’ancien bouton Accessibilité était activé mais l’API refusait
   l’app ; supprimer puis réajouter l’app installée a rétabli l’autorisation.
-- [ ] Dictée dans un champ de test vide, avec le micro utilisé près du vélo.
+- [x] Audio du micro Mac réellement transcrit dans la fenêtre de test, après
+  déclenchement manuel de l’utilisateur ; premier essai sans insertion (AX refusé).
+- [x] Identité de signature stable vérifiée sur plusieurs compilations ; autorisation
+  Accessibilité renouvelée par l’utilisateur et reconnue par l’app.
+- [x] Transcription d’un fichier public sans cible : texte conservé, aucun événement clavier.
+- [x] Parakeet V3 chargé hors ligne depuis les modèles FluidAudio existants ; fichiers
+  français synthétiques et anglais publics transcrits en 50–81 ms une fois chargé.
+  Première préparation Core ML : 17,1 s ; test natif complet à chaud : 380 ms.
+  Une erreur de vocabulaire observée sur l’échantillon français : ces mesures ne
+  prouvent pas la qualité sur la voix de l’utilisateur.
+- [x] Bundle Parakeet installé avec la même identité de signature ; fenêtre Mac
+  affichant le modèle, autorisations Microphone et Accessibilité reconnues,
+  inscription au démarrage toujours active.
+- [x] Tests : arrêt avec fin de phrase, annulation pendant la demande de permission,
+  conservation temporaire du texte et absence de transcript dans les journaux.
+- [ ] Dictée insérée dans un champ de test vide, après renouvellement de l’autorisation.
+- [ ] Aperçu Parakeet pendant une phrase longue et qualité sur le micro réel.
 - [ ] Paroles françaises et anglaises correctement transcrites pendant le pédalage.
 - [ ] Changer de champ pendant une transcription empêche l’insertion automatique.
 - [ ] Insertion manuelle de la dictée en attente dans le champ choisi.
-- [ ] Arrêt de l’écoute et absence d’insertion après arrêt, sortie de l’app ou déconnexion.
+- [ ] Terminer finit la dernière phrase ; Annuler, fermeture et déconnexion arrêtent
+  l’écoute sans nouvelle insertion. Validation matérielle encore nécessaire.
 - [ ] Essai dans les applications d’IA réellement utilisées ; aucun envoi automatique.
 
 ## Métriques et session

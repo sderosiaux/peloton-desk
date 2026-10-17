@@ -42,12 +42,16 @@ Il reste en mémoire pendant la connexion et n’est pas enregistré par Peloton
 Le bureau est mis à l’échelle pour l’écran ; vérifier la précision du toucher et
 la lisibilité avant de commencer une session de travail.
 
-Le mode **Bureau fluide** convertit sur le Mac les pixels VNC en JPEG (qualité 70,
-couleurs 4:4:4) ou en PNG si celui-ci est plus petit. Les petits rectangles restent
-sans perte. Les coordonnées et la résolution du Mac ne changent pas ; clavier,
-toucher et authentification continuent de passer par le serveur VNC macOS.
-Le contenu est traité en mémoire, sans enregistrer les images. Pour revenir au
-flux d’origine sans perte : `··· → Image exacte → Reconnecter le bureau`.
+Le mode **Bureau fluide** conserve l’image source en mémoire et compare chaque
+mise à jour. Les pixels inchangés ne traversent pas le Wi-Fi. Les changements
+éloignés sont séparés par tuiles de 128 pixels, puis regroupés pour réduire le
+nombre de dessins. Les petites zones de texte utilisent PNG ou des pixels bruts ;
+les grandes images choisissent PNG ou JPEG qualité 70, couleurs 4:4:4.
+Les CopyRect de macOS sont conservés et mettent aussi à jour le cache. Un
+rafraîchissement complet demandé par le client invalide ce cache ; un changement
+de taille le recrée. Les coordonnées et la résolution ne changent pas.
+Le contenu reste en mémoire, sans enregistrer les images. Pour revenir au flux
+d’origine : `··· → Image exacte → Reconnecter le bureau`.
 
 Si VNC montre seulement le fond d’écran ou un écran de connexion distinct avec
 un clavier US, demander à macOS de rejoindre la session physique. Dans un Terminal :
@@ -78,28 +82,63 @@ champ sélectionné et d’y insérer la transcription.
 Le menu se met à jour à son ouverture et toutes les cinq secondes. **Dictée autorisée ✓**
 est grisé quand les deux droits sont reconnus par l’app ; cela signifie que la dictée
 est disponible, pas que le micro écoute. Les réglages du Bike affichent le même état.
-Après une nouvelle compilation signée ad hoc, macOS peut montrer un interrupteur
-Accessibilité activé tout en refusant la nouvelle version. Désactiver puis réactiver
-l’autorisation pour l’app installée et la relancer. Si cela ne suffit pas, retirer
-l’entrée avec **−**, puis ajouter avec **+** `/Applications/Peloton Desk Mac.app`.
-Cette recréation a rétabli l’accès sur le Mac testé ; le menu a ensuite reconnu les
-deux autorisations. Une identité de signature stable est nécessaire pour éviter
-cette réautorisation entre versions de développement.
+Les builds utilisent maintenant une identité de signature stable, conservée dans
+un trousseau privé sous `.local/signing/`. Ce trousseau entre temporairement dans
+la liste de recherche pendant la signature, puis la liste précédente est restaurée
+et le trousseau verrouillé. Aucun certificat n’est ajouté aux autorités de confiance.
+Il est aussi possible de définir `PELOTON_DESK_SIGN_IDENTITY`.
 
-Le bouton **Dictée** du Bike active l’écoute jusqu’à son arrêt. Une pause d’environ
-900 ms termine une phrase. Le modèle `base` multilingue est exécuté par whisper.cpp.
-Changer le moteur ou le modèle via `.local/voice.json` ; aucun service cloud n’est utilisé.
+Lors du passage depuis les anciennes versions signées ad hoc, retirer l’ancienne
+entrée Accessibilité avec **−**, puis ajouter avec **+**
+`/Applications/Peloton Desk Mac.app`. Les builds suivants conservent cette identité.
+La demande de micro passe par le compagnon qui affiche son état, à l’activation
+explicite de l’écoute.
 
-Sélectionner d’abord un champ texte depuis le Bike. Si le focus change pendant la
-transcription, l’insertion automatique est refusée. Sélectionner le champ voulu,
-puis `··· → Insérer la dictée en attente`. Cette insertion manuelle va au champ
-actuellement sélectionné ; l’application n’appuie jamais sur Entrée.
+Le bouton **Dictée** du Bike active l’écoute jusqu’à son arrêt. L’aperçu provisoire
+est calculé environ toutes les secondes avec Parakeet, toutes les deux secondes avec Whisper ; un aperçu encore en cours n’est pas
+empilé dans une file d’attente. Une pause de 900 ms termine une phrase, ou un segment
+de 20 secondes en cas de parole continue. Le texte provisoire peut changer.
 
-Tester d’abord avec un texte sans importance dans un champ vide. Les éditeurs
-qui n’exposent pas un champ texte via l’accessibilité peuvent ne pas fonctionner.
-Le bouton Dictée, la mise en arrière-plan de l’app et la fermeture de la connexion
-arrêtent l’écoute ; en cas de perte brutale du réseau, le délai de détection du
-WebSocket peut retarder cet arrêt.
+Le collage final vérifie le même champ avant ⌘V, avec la disposition de clavier
+active. Il ne presse jamais Entrée. La transmission d’un raccourci ne prouve pas
+que l’application destinataire a effectivement accepté le collage : le texte reste
+visible dans la fenêtre Mac. Si le champ est absent ou a changé, l’audio est tout
+de même transcrit et le texte conservé pour copie. Depuis le Bike, utiliser aussi
+`··· → Insérer la dictée en attente` après avoir sélectionné le champ voulu.
+
+**Icône vélo → Tester la dictée sur le Mac…** ouvre un panneau flottant avec le
+micro utilisé, son niveau, les étapes du traitement, l’aperçu et les résultats.
+Démarrer, sélectionner son prompt, puis parler. Le Bike n’est pas nécessaire.
+**Terminer la dictée** arrête le micro et termine les phrases capturées ; **Annuler**,
+fermer le panneau ou perdre sa connexion annule le traitement restant. Une coupure
+brutale du réseau peut retarder la détection par le WebSocket.
+
+### Modèles
+
+**Whisper** utilise `whisper.cpp` et un modèle multilingue, par défaut `base` :
+
+```json
+{"engine":"whisper","whisper":"/opt/homebrew/bin/whisper-cli","model":"/chemin/vers/ggml-base.bin"}
+```
+
+**Parakeet V3** utilise FluidAudio, chargé une fois par session d’écoute. Compiler
+le moteur séparé avec `make asr-build`, puis préparer un dossier de modèles :
+
+```sh
+.local/bin/PelotonDeskASR --prepare /chemin/vers/modeles/parakeet-tdt-0.6b-v3
+```
+
+Un dossier V3 déjà présent dans le cache FluidAudio de VoiceInk peut aussi être
+utilisé directement. Le mode de transcription du moteur interdit les téléchargements ;
+seule la commande explicite `--prepare` peut récupérer les poids. Configuration
+`.local/voice.json` :
+
+```json
+{"engine":"parakeet","worker":"/chemin/du/depot/.local/bin/PelotonDeskASR","model":"/chemin/vers/modeles/parakeet-tdt-0.6b-v3"}
+```
+
+Ces fichiers et chemins personnels restent hors de Git. Les deux moteurs restent
+locaux et ne dépendent pas de VoiceInk pour fonctionner.
 
 ## Capteurs et durée
 
@@ -117,7 +156,12 @@ make app-doctor
 make app-test
 ```
 
-Les journaux du compagnon restent dans `.local/companion.log`. Les jetons et le
+Les journaux du compagnon restent dans `.local/companion.log`. Ils indiquent les
+étapes, les durées, le nombre de caractères et la présence d’un champ cible, sans
+texte dicté ni audio. Les vingt dernières phrases restent en mémoire dix minutes ;
+la fenêtre Mac les affiche, et l’API authentifiée `/api/voice/history` permet le
+diagnostic. Les fichiers audio temporaires sont supprimés après traitement ou arrêt
+normal. Un arrêt brutal du système peut laisser un répertoire temporaire à nettoyer. Les jetons et le
 numéro d’appareil ne doivent pas être copiés dans un rapport public.
 Si le Bike affiche la page d’attente, vérifier ADB puis rouvrir le compagnon Mac.
 Si le bouton bureau reste absent, vérifier le partage d’écran et son port local 5900.

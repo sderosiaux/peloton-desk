@@ -17,6 +17,7 @@
     <span class="local-note">Chez vous. Sur votre réseau.</span>
   </section>
   <div id="notice" role="status" hidden></div>
+  <div id="live-transcript" class="live-preview" role="status" hidden><span class="eyebrow">DICTÉE · EN COURS</span><p id="live-text"></p></div>
   <aside class="dock" aria-label="Session et métriques">
     <button id="session" class="session" aria-label="Démarrer la session"><span id="session-icon">▶</span></button>
     <div class="metric"><span class="label">DURÉE</span><strong id="duration">00:00</strong></div>
@@ -25,7 +26,7 @@
     <div class="metric"><span class="label">RÉSISTANCE</span><strong id="resistance">—</strong></div>
     <div class="metric secondary"><span class="label">CADENCE</span><strong><span id="cadence">—</span><small>rpm</small></strong></div>
     <span class="divider"></span>
-    <button id="voice" class="voice" aria-pressed="false"><span class="mic-dot"></span><span id="voice-label">Dictée</span></button>
+    <button id="voice" class="voice" aria-pressed="false"><svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></svg><span id="voice-label">Dictée</span></button>
     <button id="settings" class="settings" aria-label="Réglages de la session">···</button>
   </aside>
   <dialog id="password-dialog"><form id="password-form">

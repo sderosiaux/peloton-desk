@@ -4,7 +4,7 @@ import { elapsed, toggle, formatDuration } from './session.mjs';
 const PasswordDesktop = passwordDesktop(RFB);
 const FastDesktop = fastDesktop(RFB);
 const $ = id => document.getElementById(id);
-let rfb, status = {}, voiceActive = false, eventSocket, noticeTimer, pendingText = '', desktopConnected = false;
+let rfb, status = {}, voiceActive = false, eventSocket, noticeTimer, pendingText = '', finishing = false, lastTranscript = 0, previewPhrase = 0, desktopConnected = false;
 let timer = { elapsed: Number(localStorage.getItem('elapsed') || 0), running: false, started: 0 };
 let fastMode = localStorage.getItem('desktopMode') !== 'exact';
 const origin = location.origin, wsOrigin = origin.replace(/^http/, 'ws');
@@ -49,12 +49,13 @@ $('insert-pending').onclick=()=>{
   }
   pendingText='';$('insert-pending').hidden=true;$('settings-dialog').close();
 };
-async function stopVoice(){if(!voiceActive)return;try{await api('voice/stop',{});}catch{} voiceState(false);}
-function voiceState(active){voiceActive=active;$('voice').setAttribute('aria-pressed',String(active));$('voice-label').textContent=active?'À l’écoute':'Dictée';}
-$('voice').onclick=async()=>{try{if(voiceActive){await stopVoice();return;}if($('welcome').hidden===false){notice('Connectez le bureau, puis touchez un champ de texte.');return;}await api('voice/start',{});voiceState(true);notice('Dictée active. Une pause termine chaque phrase.');}catch(e){notice(e.message);}};
+async function stopVoice(){if(!voiceActive&&!finishing)return;try{await api('voice/stop',{source:'bike'});}catch{} voiceState(false);}
+function voiceState(active,phase){voiceActive=active;finishing=phase==='finishing'||phase==='starting';$('voice').disabled=finishing;$('voice').setAttribute('aria-pressed',String(active));$('voice-label').textContent=phase==='starting'?'Préparation…':finishing?'Transcription…':active?'À l’écoute':'Dictée';}
+$('voice').onclick=async()=>{try{if(voiceActive){$('voice').disabled=true;await api('voice/finish',{});return;}if($('welcome').hidden===false){notice('Connectez le bureau, puis touchez un champ de texte.');return;}$('voice').disabled=true;await api('voice/start',{});notice('Démarrage du micro…');}catch(e){$('voice').disabled=false;notice(e.message);}};
 function voiceEvents(){
+  lastTranscript=0;
   eventSocket=new WebSocket(wsOrigin+'/events');
-  eventSocket.onmessage=e=>{const data=JSON.parse(e.data);if(data.type==='voice-state')voiceState(data.active);if(data.type==='error'||data.type==='notice')notice(data.message);if(data.type==='transcription'){if(!data.inserted&&data.text){pendingText=data.text;$('insert-pending').hidden=false;notice('Champ modifié : dictée conservée. Touchez le bon champ puis choisissez « Insérer la dictée en attente » dans ···.');}else notice(data.inserted?'Texte inséré.':data.message||'Phrase vide : aucun texte inséré.');}};
+  eventSocket.onmessage=e=>{const data=JSON.parse(e.data);if(data.type==='voice-state')voiceState(data.active,data.phase);if(data.type==='error'||data.type==='notice'||data.type==='voice-stage')notice(data.message);if(data.type==='transcription-preview'){previewPhrase=data.phraseId;$('live-text').textContent=data.text;$('live-transcript').hidden=false;$('live-text').scrollTop=$('live-text').scrollHeight;}if(data.type==='voice-state'&&data.phase==='idle')$('live-transcript').hidden=true;if(data.type==='transcription'&&data.id>lastTranscript){if(data.phraseId>=previewPhrase)$('live-transcript').hidden=true;lastTranscript=data.id;if(data.replayed)return;if(!data.inserted&&data.text){pendingText += (pendingText?' ':'')+data.text;$('insert-pending').hidden=false;notice('Champ modifié : dictée conservée. Touchez le bon champ puis choisissez « Insérer la dictée en attente » dans ···.');}else notice(data.message||'Phrase vide : aucun texte inséré.');}};
   eventSocket.onclose=()=>{voiceState(false);setTimeout(voiceEvents,3000);};
 }
 function metrics(){

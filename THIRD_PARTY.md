@@ -21,3 +21,13 @@ provient des mesures publiées dans
 [Pelomon : computing speed](https://ihaque.org/posts/2020/12/25/pelomon-part-ib-computing-speed/).
 
 Le partage d’écran utilise le service VNC fourni avec macOS.
+
+- **OpenWhispr**, MIT : la résolution du raccourci de collage selon la disposition
+  clavier s’inspire de son [helper macOS](https://github.com/OpenWhispr/openwhispr/blob/main/resources/macos-fast-paste.swift).
+  [Avis de licence](licenses/OpenWhispr-MIT.txt).
+- **VoiceInk**, GPL-3.0 : [référence de comportement](https://github.com/Beingpax/VoiceInk)
+  pour la restauration du presse-papiers et la présentation de l’aperçu. Aucun fichier
+  source VoiceInk n’est intégré au dépôt.
+- **FluidAudio 0.17.7**, Apache-2.0 : [source](https://github.com/FluidInference/FluidAudio/tree/v0.17.7).
+  [Avis de licence](licenses/FluidAudio-Apache-2.0.txt). Moteur optionnel Core ML pour [Parakeet TDT 0.6B V3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3).
+  Les poids sont installés séparément ; le moteur de transcription reste hors ligne.
