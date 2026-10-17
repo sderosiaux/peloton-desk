@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <meta name="theme-color" content="#f5f4ef">
+  <title>Peloton Desk</title><link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main id="desktop" aria-label="Bureau du Mac"></main>
+  <section id="welcome" class="welcome">
+    <div class="brand"><span class="mark">p<span>·</span>d</span><span>PELOTON DESK</span></div>
+    <div class="intro"><span class="eyebrow">UN PEU DE MOUVEMENT. TOUT VOTRE BUREAU.</span>
+      <h1>Votre Mac.<br>Une autre position.</h1>
+      <p id="connection-detail">Connexion au compagnon Mac…</p>
+      <button id="connect" class="primary" hidden>Afficher mon bureau <span>↗</span></button>
+    </div>
+    <span class="local-note">Chez vous. Sur votre réseau.</span>
+  </section>
+  <div id="notice" role="status" hidden></div>
+  <aside class="dock" aria-label="Session et métriques">
+    <button id="session" class="session" aria-label="Démarrer la session"><span id="session-icon">▶</span></button>
+    <div class="metric"><span class="label">DURÉE</span><strong id="duration">00:00</strong></div>
+    <span class="divider"></span>
+    <div class="metric"><span class="label">VITESSE <small>EST.</small></span><strong><span id="speed">—</span><small>km/h</small></strong></div>
+    <div class="metric"><span class="label">RÉSISTANCE</span><strong id="resistance">—</strong></div>
+    <div class="metric secondary"><span class="label">CADENCE</span><strong><span id="cadence">—</span><small>rpm</small></strong></div>
+    <span class="divider"></span>
+    <button id="voice" class="voice" aria-pressed="false"><span class="mic-dot"></span><span id="voice-label">Dictée</span></button>
+    <button id="settings" class="settings" aria-label="Réglages de la session">···</button>
+  </aside>
+  <dialog id="password-dialog"><form id="password-form">
+    <span class="eyebrow">PREMIÈRE CONNEXION</span><h2>Ouvrir le bureau</h2>
+    <p>Le mot de passe du partage d’écran de votre Mac.</p>
+    <label>Mot de passe<input id="password" type="password" autocomplete="off" required></label>
+    <button class="primary" type="submit">Se connecter</button>
+    <button class="quiet" type="button" id="password-cancel">Annuler</button>
+  </form></dialog>
+  <dialog id="settings-dialog"><div class="dialog-content">
+    <span class="eyebrow">VOTRE SESSION</span><h2>Tout à portée de main.</h2>
+    <p id="sensor-status">Capteurs en attente.</p><p id="voice-status">Dictée locale sur le Mac.</p>
+    <div class="actions"><button id="insert-pending" hidden>Insérer la dictée en attente</button><button id="reconnect">Reconnecter le bureau</button><button id="reset-timer">Remettre la durée à zéro</button></div>
+    <p class="hint">Touchez un champ sur le Mac, puis activez la dictée. Les pauses terminent les phrases. L’envoi reste manuel.</p>
+    <button class="primary" id="close-settings">Revenir au bureau</button>
+  </div></dialog>
+  <script src="/app.js" type="module"></script>
+</body></html>

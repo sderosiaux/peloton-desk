@@ -1,112 +1,81 @@
 # Peloton Desk
 
-Travailler sur un Mac depuis l’écran tactile d’un Peloton Bike, avec la vitesse,
-la résistance et la durée visibles en superposition. La dictée utilise le logiciel
-déjà installé sur le Mac. VoiceInk est le choix initial, car il a été détecté localement.
+Une app sur le Peloton Bike pour travailler sur son Mac en pédalant : bureau
+tactile, résistance, cadence, vitesse estimée, durée et dictée locale.
 
-Ce dépôt contient les outils de diagnostic, les lanceurs et le guide d’installation.
-L’image et le tactile passent par Sunshine/Moonlight ; les métriques viennent de Grupetto.
-Le fonctionnement complet sur le Bike reste à valider.
+Le compagnon **Peloton Desk Mac** se trouve dans la barre des menus (`PD`).
+L’app Android utilise le partage d’écran intégré au Mac, avec noVNC embarqué.
+Moonlight, Sunshine, Grupetto et VoiceInk ne sont pas nécessaires à ce parcours.
 
-```mermaid
-flowchart LR
-    Mac[Mac · Sunshine] -->|Bureau sur le réseau local| Bike[Peloton · Moonlight]
-    Bike -->|Toucher traduit en clic| Mac
-    Sensors[Capteurs · Grupetto] -->|Métriques en superposition| Bike
-    Mic[Micro près du vélo] -->|Connexion directe| Voice[Dictée sur le Mac]
-    Voice -->|Texte dans le champ sélectionné| Mac
-```
+## Premier lancement
 
-## Démarrer
+1. Garder le Bike connecté par ADB sans fil et ouvrir **Peloton Desk Mac**.
+2. Sur le Mac, activer **Réglages Système → Général → Partage → Partage d’écran**,
+   puis l’accès VNC avec un mot de passe dédié, choisi directement dans macOS.
+3. Sur le Bike, toucher **Afficher mon bureau** et saisir ce mot de passe.
+4. Pour la dictée : menu **PD → Autorisations de dictée…**, puis autoriser le micro
+   et l’accessibilité pour **Peloton Desk Mac**.
+5. Depuis le Bike, sélectionner un champ texte, activer **Dictée**, puis parler.
 
-Python 3.10+ suffit pour ces outils, sans dépendances Python à installer.
+Les pauses terminent chaque phrase. L’insertion automatique vérifie que le champ
+sélectionné n’a pas changé ; sinon la transcription reste disponible dans `···`.
+L’envoi du texte reste manuel. Le micro utilisé est l’entrée audio du **Mac** :
+brancher le micro placé près du vélo au Mac, pas à la tablette Peloton.
 
-```sh
-make doctor
-make plan
-```
+## État vérifié le 16 octobre 2026
 
-`doctor` vérifie les applications du Mac, ADB, l’appareil connecté et les paquets
-Android nécessaires. Il ne modifie pas les réglages. Un code de sortie `1` signifie
-que des prérequis manquent ; `2` signale une erreur d’utilisation ou d’exécution.
-Ces codes sont ceux de l’outil Python ; Make remonte ses propres codes d’échec.
-Même un résultat entièrement positif ne valide pas encore l’expérience tactile/vocale.
+- APK compilé, signé et installé sur un Bike PLTN-RB1VQ, Android 11 / API 30.
+- Compagnon installé dans `/Applications/Peloton Desk Mac.app` et serveur actif.
+- Interface affichée sur le Bike et bureau Mac en miroir, confirmés par l’utilisateur.
+- Lecture réelle des capteurs : cadence 0, résistance 34 au premier échantillon.
+- Modèle Whisper `base` multilingue vérifié par SHA-256 et testé sur un audio public.
+- Tests des outils, du tunnel, des protections HTTP, du chronomètre et de la segmentation réussis.
 
-`plan` affiche les commandes de lancement du Mac sans les exécuter.
-Après installation et configuration, `make host` ouvre Sunshine et VoiceInk en
-arrière-plan, sans déclencher d’enregistrement ni lancer la connexion au Bike.
-
-Pour choisir un autre logiciel de dictée :
-
-```sh
-make doctor VOICE_APP=superwhisper
-make host VOICE_APP=superwhisper
-```
-
-Le nom doit correspondre au bundle `.app` présent dans `/Applications` ou
-`~/Applications`. Le lanceur Sunshine attend lui aussi le bundle macOS installé
-depuis le DMG ; une installation CLI seule doit être lancée séparément.
-
-Le Bike peut se connecter en Wi-Fi par code d’appairage ou en USB ; voir le
-[guide de connexion](docs/setup.md#1-identifier-lécran-et-préparer-la-liaison).
-Après connexion, relever son identifiant avec `adb devices -l`, puis :
-
-```sh
-python3 tools/desk.py doctor --serial IDENTIFIANT_DU_BIKE
-python3 tools/desk.py launch-bike metrics --serial IDENTIFIANT_DU_BIKE
-python3 tools/desk.py launch-bike moonlight --serial IDENTIFIANT_DU_BIKE
-```
-
-Ces deux dernières commandes ouvrent les applications déjà installées. La première
-configuration de l’overlay et la sélection du bureau Mac restent dans leurs interfaces.
-Ajouter `--dry-run` pour afficher une commande sans contacter le Bike.
-
-## Installation et validation
-
-Suivre [le guide de configuration](docs/setup.md), puis
-[le scénario de validation](docs/validation.md).
-
-État vérifié le 16 octobre 2026 :
-
-- Mac Apple Silicon, macOS 26.7.1.
-- VoiceInk et ADB détectés.
-- Sunshine 2026.914.233613 installé dans `/Applications/Sunshine.app` ; service local démarré.
-- Bike PLTN-RB1VQ connecté par ADB sans fil, Android 11 / API 30.
-- Moonlight 12.2 et Grupetto v0.0.43 installés depuis leurs versions officielles ; SHA-256 vérifiés.
-- Moonlight ouvert avec succès via son activité explicite ; le lancement implicite échoue sur ce firmware.
-- Le diagnostic détecte tous les prérequis ; les autorisations et l’appairage Sunshine/Moonlight restent à configurer.
-- Aucun test de streaming, de dictée à distance ou d’overlay effectué sur le Bike.
-
-Les rapports personnels peuvent être conservés dans `.local/`, exclu de Git :
-
-```sh
-mkdir -p .local
-python3 tools/desk.py doctor --json > .local/doctor.json
-```
+**À valider en usage réel :** précision du toucher, métriques pendant le pédalage,
+micro, insertion dans les applications d’IA et comportement lors des déconnexions.
+La vitesse est estimée depuis la puissance, pas mesurée indépendamment.
 
 ## Développement
 
+Prérequis : macOS avec Swift et les outils Xcode, Node/npm, Python 3.10+, ADB,
+Java et Android Platform 35 / Build Tools 35.0.1. Le SDK Android requiert l’acceptation
+de la licence Google. Les dépendances et artefacts locaux restent hors de Git.
+
 ```sh
-make test
+npm ci
+uv venv
+uv pip install -r requirements.txt
+make app-build
+adb devices -l
+make app-install SERIAL=IDENTIFIANT_DU_BIKE
+make app-test
+make app-doctor
 ```
 
-Les tests couvrent le ciblage ADB, les appareils non autorisés, les délais d’attente,
-le mode simulation et les erreurs Android renvoyées avec un code de sortie zéro.
+Le SDK est attendu dans `.local/android-sdk`, ou à l’emplacement `ANDROID_SDK_ROOT`.
+Le compagnon installé référence ce dépôt et son environnement `.venv` : ne pas
+déplacer le dépôt après installation sans reconstruire le bundle Mac.
 
-Le développement éventuel d’un bouton tactile de dictée ou d’une barre de métriques
-personnalisée vient après le premier essai sur le matériel. Le bouton devra conserver
-le focus du champ sur le Mac et utiliser le déclencheur du logiciel de dictée choisi.
-Une API de déclenchement VoiceInk n’est pas encore validée.
+Pour choisir un autre modèle ou binaire Whisper, créer `.local/voice.json` :
 
-## Références
+```json
+{"whisper":"/opt/homebrew/bin/whisper-cli","model":"/chemin/vers/ggml-base.bin"}
+```
 
-Sources consultées le 16 octobre 2026 :
+Consulter [la configuration](docs/setup.md), [les essais matériels](docs/validation.md)
+et [les dépendances tierces](THIRD_PARTY.md).
+Les anciens lanceurs `tools/desk.py` et [le guide Sunshine/Moonlight](docs/legacy-streaming.md)
+restent disponibles pour référence.
 
-- [OpenPelo et son installation](https://github.com/doudar/Openpelo).
-- [Catalogue OpenPelo : Moonlight et Grupetto](https://github.com/doudar/Openpelo/blob/main/apps_config.json).
-- [Sunshine sur macOS](https://docs.lizardbyte.dev/projects/sunshine/latest/md_docs_2getting__started.html).
-- [Moonlight : bureau et commandes tactiles](https://github.com/moonlight-stream/moonlight-docs/wiki/Setup-Guide).
-- [Grupetto : métriques, overlay et chronomètre](https://github.com/doudar/grupetto).
-- [VoiceInk : raccourcis de dictée configurables](https://github.com/Beingpax/VoiceInk).
+## Limites du prototype
 
-Les logiciels tiers gardent leurs licences et leurs propres procédures d’installation.
+Le transport dépend de la connexion ADB appairée. Le compagnon HTTP écoute
+uniquement sur `127.0.0.1:8765` ; le partage d’écran macOS est un service séparé,
+accessible sur le réseau selon les réglages du Mac. Le mot de passe VNC n’est pas
+conservé par l’app. Garder le Mac éveillé et sa session ouverte.
+
+La dictée utilise un seuil d’énergie sonore simple. Son comportement face au bruit
+du pédalage reste à tester. Les phrases sont limitées à 20 secondes, avec au plus
+deux transcriptions en cours ou en attente. Les extraits audio sont temporaires et
+supprimés après traitement ou arrêt normal. La qualité et le focus doivent être
+vérifiés avec le micro et les applications réellement utilisés.

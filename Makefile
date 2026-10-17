@@ -1,7 +1,23 @@
 PYTHON ?= python3
 VOICE_APP ?= VoiceInk
 
-.PHONY: doctor doctor-json plan host test
+.PHONY: doctor doctor-json plan host test app-build app-install app-doctor app-test
+
+app-build:
+	npm run build
+	$(PYTHON) tools/build.py mac
+	$(PYTHON) tools/build.py android
+
+app-install:
+	$(PYTHON) tools/app.py install --serial "$(SERIAL)"
+
+app-doctor:
+	$(PYTHON) tools/app.py doctor
+
+app-test: test
+	npm test
+	.venv/bin/python -m unittest discover -s macos/tests -q
+	".local/Peloton Desk Mac.app/Contents/MacOS/PelotonDesk" --self-test
 
 doctor:
 	@$(PYTHON) tools/desk.py doctor --voice-app "$(VOICE_APP)"

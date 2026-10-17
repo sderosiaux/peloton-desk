@@ -1,0 +1,258 @@
+"""Loopback-only gateway. ADB's paired TLS transport carries it to the Bike."""
+import argparse
+import asyncio
+import contextlib
+import hmac
+import json
+import os
+import secrets
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+from aiohttp import web, WSMsgType
+
+ROOT = Path(__file__).resolve().parents[1]
+PORT = 8765
+TOKEN = web.AppKey('token', str)
+ORIGIN = web.AppKey('origin', str)
+CLIENTS = web.AppKey('clients', set)
+SOCKETS = web.AppKey('sockets', set)
+
+
+class Voice:
+    def __init__(self, app):
+        self.app, self.process, self.reader = app, None, None
+        self.lifecycle = asyncio.Lock()
+
+    def paths(self):
+        config_path = ROOT / '.local/voice.json'
+        config = json.loads(config_path.read_text()) if config_path.exists() else {}
+        return (Path(os.environ.get('PELOTON_DESK_HELPER', ROOT / '.local/Peloton Desk Mac.app/Contents/MacOS/PelotonDesk')),
+                Path(config.get('whisper', shutil.which('whisper-cli') or '/opt/homebrew/bin/whisper-cli')),
+                Path(config.get('model', ROOT / '.local/models/ggml-base.bin')))
+
+    async def emit(self, event):
+        for client in tuple(self.app[CLIENTS]):
+            with contextlib.suppress(ConnectionError, RuntimeError):
+                await client.send_json(event)
+
+    async def start(self):
+        async with self.lifecycle:
+            await self._start()
+
+    async def _start(self):
+        if self.process and self.process.returncode is None:
+            return
+        binary, whisper, model = self.paths()
+        if not all(p.is_file() for p in (binary, whisper, model)):
+            raise web.HTTPConflict(text=json.dumps({'error': 'Le moteur de dictée locale doit encore être installé sur le Mac.'}), content_type='application/json')
+        if not self.app[CLIENTS]:
+            raise web.HTTPConflict(text=json.dumps({'error': 'Reconnectez Peloton Desk avant d’activer le micro.'}), content_type='application/json')
+        self.process = await asyncio.create_subprocess_exec(
+            str(binary), '--voice', str(whisper), str(model),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+        self.reader = asyncio.create_task(self.read_events(self.process))
+
+    async def read_events(self, process):
+        try:
+            async for line in process.stdout:
+                try:
+                    event = json.loads(line)
+                    await self.emit(event)
+                except (ValueError, UnicodeDecodeError):
+                    continue
+            await process.wait()
+        finally:
+            if self.process is process:
+                self.process = None
+            await self.emit({'type': 'voice-state', 'active': False})
+
+    async def stop(self):
+        async with self.lifecycle:
+            await self._stop()
+
+    async def _stop(self):
+        process = self.process
+        if process and process.returncode is None:
+            with contextlib.suppress(ProcessLookupError):
+                process.terminate()
+            try:
+                await asyncio.wait_for(process.wait(), 3)
+            except asyncio.TimeoutError:
+                with contextlib.suppress(ProcessLookupError):
+                    process.kill()
+                await process.wait()
+        if self.reader:
+            with contextlib.suppress(asyncio.CancelledError):
+                await self.reader
+            self.reader = None
+
+
+VOICE = web.AppKey('voice', Voice)
+
+
+def authenticated(request):
+    return hmac.compare_digest(request.cookies.get('desk_session', ''), request.app[TOKEN])
+
+
+@web.middleware
+async def guard(request, handler):
+    if request.host != request.app[ORIGIN].removeprefix('http://'):
+        return web.json_response({'error': 'Hôte refusé.'}, status=403)
+    sensitive = request.path.startswith('/api/') or request.path in ('/vnc', '/events')
+    if (sensitive and request.method != 'GET') or request.path in ('/vnc', '/events'):
+        if request.headers.get('Origin') != request.app[ORIGIN]:
+            return web.json_response({'error': 'Origine refusée.'}, status=403)
+    if sensitive and request.path != '/api/auth' and not authenticated(request):
+        return web.json_response({'error': 'Ouvrez Peloton Desk depuis son lanceur sur le Mac.'}, status=401)
+    return await handler(request)
+
+
+async def auth(request):
+    try:
+        data = await request.json()
+        token = data.get('token', '')
+        valid = isinstance(token, str) and hmac.compare_digest(token.encode(), request.app[TOKEN].encode())
+    except (ValueError, AttributeError):
+        valid = False
+    if not valid:
+        return web.json_response({'error': 'Connexion au compagnon non autorisée.'}, status=403)
+    response = web.json_response({'ok': True})
+    response.set_cookie('desk_session', request.app[TOKEN], httponly=True, samesite='Strict')
+    return response
+
+
+async def status(request):
+    available = False
+    try:
+        _, writer = await asyncio.wait_for(asyncio.open_connection('127.0.0.1', 5900), 1)
+        writer.close()
+        await writer.wait_closed()
+        available = True
+    except (OSError, asyncio.TimeoutError):
+        pass
+    ready = all(p.is_file() for p in request.app[VOICE].paths())
+    return web.json_response({'vncAvailable': available, 'voiceReady': ready,
+        'voiceDetail': 'Dictée locale prête. Le Mac demandera l’accès au micro et à l’accessibilité.' if ready else 'Moteur de dictée locale à installer sur le Mac.'})
+
+
+async def proxy(request):
+    try:
+        reader, writer = await asyncio.wait_for(asyncio.open_connection('127.0.0.1', 5900), 3)
+    except (OSError, asyncio.TimeoutError):
+        raise web.HTTPServiceUnavailable(text='Activez le partage d’écran du Mac.')
+    ws = web.WebSocketResponse(protocols=('binary',), max_msg_size=8*1024*1024, heartbeat=20)
+    await ws.prepare(request)
+    request.app[SOCKETS].add(ws)
+
+    async def upstream():
+        async for message in ws:
+            if message.type == WSMsgType.BINARY:
+                writer.write(message.data)
+                await writer.drain()
+            elif message.type == WSMsgType.ERROR:
+                break
+
+    async def downstream():
+        while chunk := await reader.read(65536):
+            await ws.send_bytes(chunk)
+
+    tasks = [asyncio.create_task(upstream()), asyncio.create_task(downstream())]
+    try:
+        await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        writer.close()
+        with contextlib.suppress(OSError):
+            await writer.wait_closed()
+        await ws.close()
+        request.app[SOCKETS].discard(ws)
+        await request.app[VOICE].stop()
+    return ws
+
+
+async def events(request):
+    ws = web.WebSocketResponse(heartbeat=15)
+    await ws.prepare(request)
+    request.app[CLIENTS].add(ws)
+    request.app[SOCKETS].add(ws)
+    try:
+        async for _ in ws:
+            pass
+    finally:
+        request.app[CLIENTS].discard(ws)
+        request.app[SOCKETS].discard(ws)
+        await request.app[VOICE].stop()
+    return ws
+
+
+async def voice_start(request):
+    await request.app[VOICE].start()
+    return web.json_response({'ok': True})
+
+
+async def voice_stop(request):
+    await request.app[VOICE].stop()
+    return web.json_response({'ok': True})
+
+
+async def cleanup(app):
+    await app[VOICE].stop()
+    for ws in tuple(app[SOCKETS]):
+        await ws.close()
+
+
+def create_app(token, origin=f'http://127.0.0.1:{PORT}'):
+    app = web.Application(middlewares=[guard], client_max_size=16384)
+    app[TOKEN], app[ORIGIN], app[CLIENTS], app[SOCKETS] = token, origin, set(), set()
+    app[VOICE] = Voice(app)
+    app.add_routes([web.post('/api/auth', auth), web.get('/api/status', status),
+        web.get('/vnc', proxy), web.get('/events', events),
+        web.post('/api/voice/start', voice_start), web.post('/api/voice/stop', voice_stop)])
+    async def index(request):
+        response = web.FileResponse(ROOT / '.local/web/index.html')
+        response.headers['Content-Security-Policy'] = "default-src 'self'; connect-src 'self' ws://127.0.0.1:8765; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+    app.router.add_get('/', index)
+    app.router.add_static('/', ROOT / '.local/web', show_index=False)
+    app.on_shutdown.append(cleanup)
+    return app
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--serial', required=True)
+    args = parser.parse_args()
+    sys.path.insert(0, str(ROOT / 'tools'))
+    from desk import run, select_device, parse_devices
+    serial = select_device(parse_devices(run(['adb', 'devices', '-l'])), args.serial)
+    token_file = ROOT / '.local/connection-token'
+    if not token_file.exists():
+        descriptor = os.open(token_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, 'w') as stream:
+            stream.write(secrets.token_urlsafe(32))
+    token_file.chmod(0o600)
+    token = token_file.read_text().strip()
+    run(['adb', '-s', serial, 'reverse', f'tcp:{PORT}', f'tcp:{PORT}'])
+    # The token goes only to the paired device; do not log the command or token.
+    # Do not wait for the first frame: the WebView needs this server to start.
+    # Keep subprocess errors private too: their default repr includes the token.
+    try:
+        result = subprocess.run(['adb', '-s', serial, 'shell', 'am', 'start', '-n',
+            'local.pelotondesk/.MainActivity', '--es', 'token', token],
+            capture_output=True, text=True, timeout=30)
+        if result.returncode or 'Error:' in result.stdout + result.stderr:
+            raise RuntimeError('Android launch failed')
+    except (subprocess.SubprocessError, OSError, RuntimeError):
+        print('Ouverture automatique du Bike impossible. Ouvrez Peloton Desk sur son écran.', flush=True)
+    print('Peloton Desk ready. Gateway bound to 127.0.0.1 only.', flush=True)
+    web.run_app(create_app(token), host='127.0.0.1', port=PORT, access_log=None, print=None)
+
+
+if __name__ == '__main__':
+    main()

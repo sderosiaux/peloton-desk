@@ -1,0 +1,11 @@
+{
+  "name": "peloton-desk",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "node tools/build-web.mjs",
+    "test": "node --test web/test/*.test.mjs"
+  },
+  "dependencies": { "@novnc/novnc": "1.7.0" },
+  "devDependencies": { "esbuild": "0.28.2" }
+}
