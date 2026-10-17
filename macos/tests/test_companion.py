@@ -1,11 +1,35 @@
 import asyncio
+import json
+import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from aiohttp import CookieJar, WSServerHandshakeError
 from aiohttp.test_utils import TestClient, TestServer, unused_port
-from macos.companion import create_app, TOKEN, VOICE, CLIENTS
+from macos.companion import create_app, voice_readiness, TOKEN, VOICE, CLIENTS
+
+
+class PermissionStatusTests(unittest.TestCase):
+    def test_ready_requires_current_microphone_and_accessibility_grants(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'permissions.json'
+            self.assertFalse(voice_readiness(True, path)[0])
+            for microphone, accessibility, age, expected in [
+                ('authorized', True, 0, True),
+                ('authorized', False, 0, False),
+                ('denied', True, 0, False),
+                ('notDetermined', False, 0, False),
+                ('authorized', True, 60, False),
+            ]:
+                with self.subTest(microphone=microphone, accessibility=accessibility, age=age):
+                    path.write_text(json.dumps({'microphone': microphone, 'accessibility': accessibility,
+                                                'updatedAt': time.time() - age}))
+                    self.assertEqual(voice_readiness(True, path)[0], expected)
+            path.write_text('invalid')
+            self.assertFalse(voice_readiness(True, path)[0])
+            self.assertFalse(voice_readiness(False, path)[0])
 
 
 class GatewayTests(unittest.IsolatedAsyncioTestCase):

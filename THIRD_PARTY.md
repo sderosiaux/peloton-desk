@@ -6,6 +6,8 @@
   Les sources correspondantes sont aussi disponibles dans `node_modules/@novnc/novnc`.
 - **esbuild 0.28.2**, MIT : [source](https://github.com/evanw/esbuild).
 - **aiohttp 3.14.5**, Apache-2.0 : [source](https://github.com/aio-libs/aiohttp).
+- **Pillow 13.0.0**, HPND : [source et licence](https://github.com/python-pillow/Pillow).
+  Conversion locale des pixels VNC vers JPEG ou PNG, en mémoire.
 - **whisper.cpp 1.9.5**, MIT : [source et modèles](https://github.com/ggml-org/whisper.cpp).
   Le binaire est installé séparément ; les poids `ggml-base.bin` proviennent du
   [dépôt de modèles](https://huggingface.co/ggerganov/whisper.cpp).

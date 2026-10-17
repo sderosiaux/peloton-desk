@@ -30,6 +30,15 @@ le bouton après avoir allumé le vélo.
    et l’accessibilité pour **Peloton Desk Mac**.
 5. Depuis le Bike, sélectionner un champ texte, activer **Dictée**, puis parler.
 
+Le menu vérifie les droits réels et devient **Dictée autorisée ✓**, grisé, lorsque
+micro et accessibilité sont accordés. Cela n’active pas le micro : seule la commande
+**Dictée** sur le Bike démarre l’écoute. Si un droit manque, le menu l’indique.
+
+Le bureau utilise par défaut le mode **fluide** : le Mac convertit les images VNC
+en JPEG ou PNG, décodés directement par le navigateur du Bike. Les petites mises
+à jour restent exactes. Le JPEG peut légèrement adoucir le texte ; pour conserver
+tous les pixels, choisir **Image exacte** dans `···`, puis reconnecter le bureau.
+
 Les pauses terminent chaque phrase. L’insertion automatique vérifie que le champ
 sélectionné n’a pas changé ; sinon la transcription reste disponible dans `···`.
 L’envoi du texte reste manuel. Le micro utilisé est l’entrée audio du **Mac** :
@@ -45,6 +54,9 @@ brancher le micro placé près du vélo au Mac, pas à la tablette Peloton.
 - Lecture réelle des capteurs : cadence 0, résistance 34 au premier échantillon.
 - Modèle Whisper `base` multilingue vérifié par SHA-256 et testé sur un audio public.
 - Tests des outils, du tunnel, des protections HTTP, du chronomètre et de la segmentation réussis.
+- Conversion du flux VNC réel vérifiée : images de 3024 × 1964 décodées après
+  conversion, environ 0,50 Mo par image complète sur le bureau observé, contre
+  environ 1,2 Mo avec le flux ZRLE précédent. Ce n’est pas une mesure de latence tactile.
 
 **À valider en usage réel :** précision du toucher, métriques pendant le pédalage,
 micro, insertion dans les applications d’IA et comportement lors des déconnexions.

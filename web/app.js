@@ -1,10 +1,12 @@
 import RFB from '@novnc/novnc';
-import { passwordDesktop } from './desktop.mjs';
+import { passwordDesktop, fastDesktop } from './desktop.mjs';
 import { elapsed, toggle, formatDuration } from './session.mjs';
 const PasswordDesktop = passwordDesktop(RFB);
+const FastDesktop = fastDesktop(RFB);
 const $ = id => document.getElementById(id);
 let rfb, status = {}, voiceActive = false, eventSocket, noticeTimer, pendingText = '', desktopConnected = false;
 let timer = { elapsed: Number(localStorage.getItem('elapsed') || 0), running: false, started: 0 };
+let fastMode = localStorage.getItem('desktopMode') !== 'exact';
 const origin = location.origin, wsOrigin = origin.replace(/^http/, 'ws');
 function notice(message) { $('notice').textContent=message; $('notice').hidden=false; clearTimeout(noticeTimer); noticeTimer=setTimeout(()=>$('notice').hidden=true,6500); }
 async function api(path, body) {
@@ -19,7 +21,8 @@ function openDesktop() {
   if (desktopConnected) return;
   if (!status.vncAvailable) { notice('Activez le partage d’écran sur le Mac.'); return; }
   if (rfb) { rfb.removeEventListener('disconnect', disconnected); rfb.disconnect(); }
-  rfb = new PasswordDesktop($('desktop'),wsOrigin+'/vnc');
+  const Desktop = fastMode ? FastDesktop : PasswordDesktop;
+  rfb = new Desktop($('desktop'),wsOrigin+'/vnc'+(fastMode?'?mode=fast':''));
   rfb.scaleViewport=true; rfb.resizeSession=false; rfb.showDotCursor=true; rfb.qualityLevel=7; rfb.compressionLevel=2;
   rfb.addEventListener('credentialsrequired',()=>{ if(!$('password-dialog').open)$('password-dialog').showModal(); $('password').focus(); });
   rfb.addEventListener('connect',()=>{ desktopConnected=true; $('welcome').hidden=true; $('password-dialog').close(); notice('Bureau connecté. Touchez un champ pour écrire.'); });
@@ -33,6 +36,9 @@ $('connect').onclick=openDesktop;
 $('session').onclick=()=>{ timer=toggle(timer,performance.now()); $('session-icon').textContent=timer.running?'Ⅱ':'▶'; $('session').setAttribute('aria-label',timer.running?'Mettre la session en pause':'Démarrer la session'); };
 setInterval(()=>{ const ms=elapsed(timer,performance.now()); $('duration').textContent=formatDuration(ms); localStorage.setItem('elapsed',Math.round(ms)); },500);
 $('settings').onclick=()=>$('settings-dialog').showModal();
+function modeLabel(){ $('desktop-mode').textContent=fastMode?'Bureau fluide · passer en image exacte':'Image exacte · passer en bureau fluide'; }
+modeLabel();
+$('desktop-mode').onclick=()=>{fastMode=!fastMode;localStorage.setItem('desktopMode',fastMode?'fast':'exact');modeLabel();notice('Mode choisi. Touchez « Reconnecter le bureau » pour l’appliquer.');};
 $('close-settings').onclick=()=>$('settings-dialog').close();
 $('reconnect').onclick=()=>{ $('settings-dialog').close(); stopVoice(); desktopConnected=false; openDesktop(); };
 $('reset-timer').onclick=()=>{timer={elapsed:0,running:false,started:0};$('session-icon').textContent='▶';$('session').setAttribute('aria-label','Démarrer la session');$('duration').textContent='00:00';localStorage.setItem('elapsed','0');$('settings-dialog').close();};

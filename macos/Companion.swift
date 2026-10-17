@@ -202,9 +202,10 @@ final class Recorder {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var item: NSStatusItem!, server: Process?
     var launcher: Process?, openItem: NSMenuItem!, statusItem: NSMenuItem!, loginItem: NSMenuItem!
+    var permissionsItem: NSMenuItem!, permissionsTimer: Timer?
     var signalSource: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -217,19 +218,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.setAccessibilityLabel("Peloton Desk")
         item.button?.toolTip="Peloton Desk — ouvrir le bureau sur le Bike"
         let menu=NSMenu()
+        menu.delegate=self
         menu.autoenablesItems=false
         let title=NSMenuItem(title:"Peloton Desk · compagnon Mac",action:nil,keyEquivalent:"");title.isEnabled=false;menu.addItem(title)
         openItem=NSMenuItem(title:"Ouvrir le bureau sur le Bike",action:#selector(openBike),keyEquivalent:"d")
         menu.addItem(openItem)
         statusItem=NSMenuItem(title:"Prêt",action:nil,keyEquivalent:"");statusItem.isEnabled=false;menu.addItem(statusItem)
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title:"Autorisations de dictée…",action:#selector(permissions),keyEquivalent:""))
+        permissionsItem=NSMenuItem(title:"Autorisations de dictée…",action:#selector(permissions),keyEquivalent:"")
+        menu.addItem(permissionsItem)
         loginItem=NSMenuItem(title:"Démarrer avec le Mac",action:#selector(toggleLogin),keyEquivalent:"")
         menu.addItem(loginItem)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title:"Quitter Peloton Desk",action:#selector(quit),keyEquivalent:"q"))
         for option in menu.items { option.target=self };item.menu=menu
         updateLoginItem()
+        updatePermissionsItem()
+        permissionsTimer=Timer(timeInterval:5,repeats:true) { [weak self] _ in self?.updatePermissionsItem() }
+        RunLoop.main.add(permissionsTimer!,forMode:.common)
         signal(SIGTERM,SIG_IGN)
         signalSource=DispatchSource.makeSignalSource(signal:SIGTERM,queue:.main)
         signalSource?.setEventHandler { [weak self] in self?.quit() }
@@ -318,6 +324,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         loginItem.state=SMAppService.mainApp.status == .enabled ? .on : .off
     }
 
+    func menuNeedsUpdate(_ menu:NSMenu) {
+        updateLoginItem()
+        updatePermissionsItem()
+    }
+
+    var permissionsURL:URL? {
+        guard let root=Bundle.main.object(forInfoDictionaryKey:"PDProjectRoot") as? String else { return nil }
+        return URL(fileURLWithPath:root).appendingPathComponent(".local/permissions.json")
+    }
+
+    func updatePermissionsItem() {
+        let microphone=AVCaptureDevice.authorizationStatus(for:.audio)
+        let accessibility=AXIsProcessTrusted()
+        let ready=microphone == .authorized && accessibility
+        if ready { permissionsItem.title="Dictée autorisée ✓" }
+        else if microphone == .authorized { permissionsItem.title="Dictée : autoriser l’accessibilité…" }
+        else if accessibility { permissionsItem.title="Dictée : autoriser le micro…" }
+        else { permissionsItem.title="Autorisations de dictée…" }
+        permissionsItem.isEnabled = !ready
+        let microphoneName:String
+        switch microphone {
+        case .authorized: microphoneName="authorized"
+        case .denied: microphoneName="denied"
+        case .restricted: microphoneName="restricted"
+        case .notDetermined: microphoneName="notDetermined"
+        @unknown default: microphoneName="unknown"
+        }
+        // The installed menu app checks its own TCC identity; the Python gateway
+        // must not infer permission from the mere presence of Whisper files.
+        let state:[String:Any] = ["microphone":microphoneName,"accessibility":accessibility,
+                                 "updatedAt":Date().timeIntervalSince1970]
+        if let url=permissionsURL, let data=try? JSONSerialization.data(withJSONObject:state) {
+            try? data.write(to:url,options:.atomic)
+            try? FileManager.default.setAttributes([.posixPermissions:0o600],ofItemAtPath:url.path)
+        }
+    }
+
     @objc func toggleLogin() {
         do {
             if SMAppService.mainApp.status == .enabled { try SMAppService.mainApp.unregister() }
@@ -328,12 +371,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func permissions() {
-        let options=[kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String:true] as CFDictionary
-        _=AXIsProcessTrustedWithOptions(options)
-        AVCaptureDevice.requestAccess(for:.audio) { _ in }
+        if !AXIsProcessTrusted() {
+            let options=[kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String:true] as CFDictionary
+            _=AXIsProcessTrustedWithOptions(options)
+        }
+        switch AVCaptureDevice.authorizationStatus(for:.audio) {
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for:.audio) { _ in
+                DispatchQueue.main.async { self.updatePermissionsItem() }
+            }
+        case .denied, .restricted:
+            if let url=URL(string:"x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                NSWorkspace.shared.open(url)
+            }
+        default: break
+        }
+        updatePermissionsItem()
     }
     @objc func quit() { NSApp.terminate(nil) }
     func applicationWillTerminate(_ notification:Notification) {
+        permissionsTimer?.invalidate()
+        if let url=permissionsURL { try? FileManager.default.removeItem(at:url) }
         if launcher?.isRunning == true { launcher?.terminate() }
         if server?.isRunning == true { server?.terminate() }
     }

@@ -42,6 +42,13 @@ Il reste en mémoire pendant la connexion et n’est pas enregistré par Peloton
 Le bureau est mis à l’échelle pour l’écran ; vérifier la précision du toucher et
 la lisibilité avant de commencer une session de travail.
 
+Le mode **Bureau fluide** convertit sur le Mac les pixels VNC en JPEG (qualité 70,
+couleurs 4:4:4) ou en PNG si celui-ci est plus petit. Les petits rectangles restent
+sans perte. Les coordonnées et la résolution du Mac ne changent pas ; clavier,
+toucher et authentification continuent de passer par le serveur VNC macOS.
+Le contenu est traité en mémoire, sans enregistrer les images. Pour revenir au
+flux d’origine sans perte : `··· → Image exacte → Reconnecter le bureau`.
+
 Si VNC montre seulement le fond d’écran ou un écran de connexion distinct avec
 un clavier US, demander à macOS de rejoindre la session physique. Dans un Terminal :
 
@@ -67,6 +74,17 @@ Le micro doit être connecté au Mac et sélectionné comme entrée audio dans m
 Le bouton **Icône vélo → Autorisations de dictée…** prépare les autorisations Microphone
 et Accessibilité pour **Peloton Desk Mac**. L’accessibilité permet d’identifier le
 champ sélectionné et d’y insérer la transcription.
+
+Le menu se met à jour à son ouverture et toutes les cinq secondes. **Dictée autorisée ✓**
+est grisé quand les deux droits sont reconnus par l’app ; cela signifie que la dictée
+est disponible, pas que le micro écoute. Les réglages du Bike affichent le même état.
+Après une nouvelle compilation signée ad hoc, macOS peut montrer un interrupteur
+Accessibilité activé tout en refusant la nouvelle version. Désactiver puis réactiver
+l’autorisation pour l’app installée et la relancer. Si cela ne suffit pas, retirer
+l’entrée avec **−**, puis ajouter avec **+** `/Applications/Peloton Desk Mac.app`.
+Cette recréation a rétabli l’accès sur le Mac testé ; le menu a ensuite reconnu les
+deux autorisations. Une identité de signature stable est nécessaire pour éviter
+cette réautorisation entre versions de développement.
 
 Le bouton **Dictée** du Bike active l’écoute jusqu’à son arrêt. Une pause d’environ
 900 ms termine une phrase. Le modèle `base` multilingue est exécuté par whisper.cpp.

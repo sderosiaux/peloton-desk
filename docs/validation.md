@@ -22,11 +22,18 @@ Conserver les résultats personnels dans `.local/validation.md`.
 - [x] Miroir de la session physique confirmé après réglage console et redémarrage du partage.
 - [ ] Toucher précis dans les quatre coins, changement de fenêtre, sélection d’un champ.
 - [ ] Défilement et déplacement d’une fenêtre, texte lisible en pédalant.
+- [x] Mode fluide : négociation VNC réelle et décodage de deux images complètes
+  de 3024 × 1964 ; environ 511 puis 503 ko transmis après conversion côté Mac.
+- [x] Tests de flux fragmenté, authentification refusée, curseur, couleurs,
+  continuité zlib et bornes de taille ; retour au mode exact conservé.
+- [ ] Gain de latence et lisibilité du mode fluide confirmés en usage tactile sur le Bike.
 - [ ] Reconnexion après veille et après interruption d’ADB.
 
 ## Dictée et focus
 
-- [ ] Autorisations Microphone et Accessibilité accordées au compagnon installé.
+- [x] Autorisations Microphone et Accessibilité reconnues par le compagnon installé.
+  Après recompilation, l’ancien bouton Accessibilité était activé mais l’API refusait
+  l’app ; supprimer puis réajouter l’app installée a rétabli l’autorisation.
 - [ ] Dictée dans un champ de test vide, avec le micro utilisé près du vélo.
 - [ ] Paroles françaises et anglaises correctement transcrites pendant le pédalage.
 - [ ] Changer de champ pendant une transcription empêche l’insertion automatique.

@@ -7,9 +7,15 @@ import json
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 
 from aiohttp import web, WSMsgType
+
+try:
+    from .vnc import fast_desktop, ProtocolError
+except ImportError:  # Direct execution by the native companion.
+    from vnc import fast_desktop, ProtocolError
 
 ROOT = Path(__file__).resolve().parents[1]
 PORT = 8765
@@ -122,6 +128,24 @@ async def auth(request):
     return response
 
 
+def voice_readiness(ready, permissions_path=ROOT / '.local/permissions.json'):
+    if not ready:
+        return False, 'Moteur de dictée locale à installer sur le Mac.'
+    try:
+        permissions = json.loads(permissions_path.read_text())
+        age = time.time() - permissions['updatedAt']
+        if not 0 <= age < 30:
+            raise ValueError('stale')
+        microphone = permissions['microphone'] == 'authorized'
+        accessibility = permissions['accessibility'] is True
+    except (OSError, ValueError, TypeError, KeyError):
+        return False, 'Ouvrez le compagnon Mac pour vérifier les autorisations de dictée.'
+    if microphone and accessibility:
+        return True, 'Dictée locale prête · micro et accessibilité autorisés.'
+    missing = 'le micro et l’accessibilité' if not microphone and not accessibility else 'le micro' if not microphone else 'l’accessibilité'
+    return False, f'Sur le Mac, menu vélo → autoriser {missing} pour la dictée.'
+
+
 async def status(request):
     available = False
     try:
@@ -132,8 +156,8 @@ async def status(request):
     except (OSError, asyncio.TimeoutError):
         pass
     ready = all(p.is_file() for p in request.app[VOICE].paths())
-    return web.json_response({'vncAvailable': available, 'voiceReady': ready,
-        'voiceDetail': 'Dictée locale prête. Le Mac demandera l’accès au micro et à l’accessibilité.' if ready else 'Moteur de dictée locale à installer sur le Mac.'})
+    voice_ready, detail = voice_readiness(ready)
+    return web.json_response({'vncAvailable': available, 'voiceReady': voice_ready, 'voiceDetail': detail})
 
 
 async def proxy(request):
@@ -154,12 +178,22 @@ async def proxy(request):
                 break
 
     async def downstream():
+        if request.query.get('mode') == 'fast':
+            await fast_desktop(reader, ws)
+            return
         while chunk := await reader.read(65536):
             await ws.send_bytes(chunk)
 
     tasks = [asyncio.create_task(upstream()), asyncio.create_task(downstream())]
     try:
-        await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        for task in done:
+            try:
+                task.result()
+            except ProtocolError:
+                await request.app[VOICE].emit({'type': 'notice', 'message': 'Bureau fluide indisponible. Dans ···, choisissez « Image exacte » puis reconnectez le bureau.'})
+            except (asyncio.IncompleteReadError, ConnectionError):
+                pass
     finally:
         for task in tasks:
             task.cancel()
