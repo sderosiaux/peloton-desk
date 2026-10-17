@@ -69,13 +69,20 @@ Conserver les résultats personnels dans `.local/validation.md`.
   continue de plus de 20 secondes reste ouverte jusqu’à une pause.
 - [x] Option Entrée : envoi dans Codex confirmé par l’utilisateur (app inaccessible
   à l’outil de contrôle ; le test a été déclenché par l’utilisateur).
+- [x] Changement d’application pendant la même écoute : phrase dans la fenêtre
+  de dictée conservée avec `companion_focused`, puis phrase dans Codex collée et
+  envoyée (`targetMode:field`, `inserted:true`, `enterPosted:true`, 909 ms).
+  Réponse reçue le 17 octobre 2026 après correction du suivi des activations sur
+  la boucle principale macOS ; aucun redémarrage de l’écoute entre les phrases.
+- [x] Assemblage des segments longs avant collage/envoi : tests sans saisie réelle,
+  y compris une fin de phrase exactement à la limite d’un segment de 20 secondes.
 - [ ] Aperçu Parakeet pendant une phrase longue et qualité sur le micro réel.
 - [ ] Paroles françaises et anglaises correctement transcrites pendant le pédalage.
 - [ ] Changer de champ pendant une transcription empêche l’insertion automatique.
 - [ ] Insertion manuelle de la dictée en attente dans le champ choisi.
 - [ ] Terminer finit la dernière phrase ; Annuler, fermeture et déconnexion arrêtent
   l’écoute sans nouvelle insertion. Validation matérielle encore nécessaire.
-- [ ] Essai dans les applications d’IA réellement utilisées ; aucun envoi automatique.
+- [ ] Essai dans les autres applications d’IA utilisées, avec et sans l’option Entrée.
 
 ## Métriques et session
 

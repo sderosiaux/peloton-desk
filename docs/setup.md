@@ -97,12 +97,19 @@ explicite de l’écoute.
 Le bouton **Dictée** du Bike active l’écoute jusqu’à son arrêt. L’aperçu provisoire
 est calculé environ toutes les secondes avec Parakeet, toutes les deux secondes avec Whisper ; un aperçu encore en cours n’est pas
 empilé dans une file d’attente. Une pause de 900 ms termine une phrase. En cas de
-parole continue, les segments de 20 secondes sont transcrits et collés sans envoyer
-Entrée ; l’envoi attend la pause ou le bouton Terminer. Le texte provisoire peut changer.
+parole continue, le moteur traite des segments de 20 secondes. Avec l’envoi
+automatique, leurs textes sont assemblés : un seul collage puis Entrée à la pause
+ou au bouton Terminer. En mode collage seul, les segments terminés sont collés
+au fur et à mesure. Le texte provisoire peut changer.
 
+La destination est choisie à la fin de la phrase, pas au début de l’écoute : on peut
+changer d’application entre deux phrases sans redémarrer. Les activations sont
+suivies sur la boucle principale macOS, puis le champ actif est relu à chaque contrôle.
 Le collage final vérifie l’application, la fenêtre et l’identifiant du champ (s’il existe) avant
 ⌘V, avec la disposition de clavier active. Un éditeur web ou terminal peut ne pas
-exposer un champ texte classique : dans ce cas, ⌘V est dirigé vers son focus système.
+exposer un champ texte classique : en mode collage seul, ⌘V est dirigé vers son
+focus système. Avec l’envoi automatique, l’absence de champ éditable confirmé
+conserve le texte dans la fenêtre de dictée, sans collage ni Entrée.
 Sans identifiant de champ stable, seule l’application et sa fenêtre (si disponible)
 peuvent être comparées ; un déplacement de curseur au sein du même éditeur n’est
 pas détecté. Les contrôles non textuels reconnus, champs sécurisés et l’app de dictée

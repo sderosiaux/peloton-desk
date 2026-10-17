@@ -42,17 +42,21 @@ Pour conserver tous les pixels : **Image exacte** dans `···`, puis reconnecte
 
 La dictée montre un **aperçu provisoire pendant la parole**, rafraîchi environ
 toutes les secondes avec Parakeet V3, toutes les deux secondes avec Whisper si le moteur suit.
-Une pause de 900 ms termine la phrase.
-Le texte final est collé avec ⌘V au focus système si la cible n’a pas changé ; le
+Une pause de 900 ms termine la phrase. La destination est le champ actif à cette
+pause : vous pouvez changer d’application sans arrêter l’écoute.
+Le texte final est collé avec ⌘V si la cible n’a pas changé pendant le traitement ; le
 presse-papiers précédent est ensuite restauré, sauf si vous avez copié autre chose.
-Les éditeurs qui n’exposent pas un champ texte classique utilisent le focus clavier
-de l’application active. Son identifiant de champ est comparé s’il est disponible ;
+En mode collage seul, les éditeurs qui n’exposent pas un champ texte classique
+utilisent le focus clavier de l’application active. Son identifiant de champ est comparé s’il est disponible ;
 sinon, seul le maintien de l’application et de sa fenêtre peut être vérifié.
 La transcription reste récupérable si le collage est annulé.
 
 L’option **Envoyer avec Entrée après chaque phrase**, dans la fenêtre Mac ou les
 réglages du Bike, colle puis appuie sur Entrée après une pause. Elle est désactivée
-par défaut, sauf préférence locale explicite. La cible est revérifiée avant Entrée.
+par défaut, sauf préférence locale explicite. Les phrases longues sont assemblées
+avant ce collage unique ; la cible est revérifiée avant Entrée. Si aucun champ
+éditable n’est confirmé, ou si la fenêtre de dictée est active, le texte reste dans
+la fenêtre de dictée pour copie, sans envoi automatique.
 Décocher cette option pour relire le prompt avant de l’envoyer.
 
 Le menu **Icône vélo → Tester la dictée sur le Mac…** ouvre une fenêtre flottante
@@ -75,6 +79,8 @@ le travail restant. Le micro est toujours celui du **Mac**.
   Microphone et Accessibilité reconnues après installation de Parakeet.
 - Dictée Parakeet dans le champ actif de Codex : collage puis Entrée confirmés
   par l’utilisateur, avec l’option d’envoi automatique activée.
+- Passage fenêtre de dictée → Codex sans arrêter l’écoute : première phrase
+  conservée, seconde collée et envoyée, vérifié dans la même session.
 - Tests des outils, du tunnel, des protections HTTP, du chronomètre et de la segmentation réussis.
 - Optimisation VNC vérifiée sur un flux réel de 3024 × 1964 : première image
   de 422 584 octets, puis mises à jour de 16 782, 3 776 et 4 octets lorsque
@@ -99,6 +105,7 @@ make app-build
 adb devices -l
 make app-install SERIAL=IDENTIFIANT_DU_BIKE
 make app-test
+make license-check
 make app-doctor
 ```
 

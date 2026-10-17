@@ -1,10 +1,13 @@
 PYTHON ?= python3
 VOICE_APP ?= VoiceInk
 
-.PHONY: doctor doctor-json plan host test app-build app-install app-doctor app-test
+.PHONY: doctor doctor-json plan host test app-build app-install app-doctor app-test asr-build license-check
 
 asr-build:
 	$(PYTHON) tools/build.py parakeet
+
+license-check:
+	.venv/bin/python tools/audit_licenses.py
 
 app-build:
 	npm run build

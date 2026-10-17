@@ -47,6 +47,15 @@ def android():
     print(apk)
 
 
+def parakeet_notices():
+    source = LOCAL / 'build/parakeet/checkouts/FluidAudio'
+    destination = LOCAL / 'bin/licenses/FluidAudio'
+    destination.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source / 'LICENSE', destination / 'LICENSE')
+    shutil.copytree(source / 'ThirdPartyLicenses', destination / 'ThirdPartyLicenses', dirs_exist_ok=True)
+    shutil.copy2(ROOT / 'THIRD_PARTY.md', destination.parent / 'THIRD_PARTY.md')
+
+
 def parakeet():
     command = ['swift', 'build', '--package-path', ROOT / 'macos/parakeet', '--scratch-path', LOCAL / 'build/parakeet', '-c', 'release']
     run(*command, '--product', 'PelotonDeskASR')
@@ -56,6 +65,7 @@ def parakeet():
     shutil.copy2(folder / 'PelotonDeskASR', destination / 'PelotonDeskASR')
     for bundle in folder.glob('*.bundle'):
         shutil.copytree(bundle, destination / bundle.name, dirs_exist_ok=True)
+    parakeet_notices()
     print(destination / 'PelotonDeskASR')
 
 
