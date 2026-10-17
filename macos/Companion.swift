@@ -22,11 +22,42 @@ func axElement(_ value: CFTypeRef?) -> AXUIElement? {
     guard let value=value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
     return (value as! AXUIElement)
 }
-func focusedField() -> AXUIElement? {
-    guard let app=NSWorkspace.shared.frontmostApplication else { return nil }
+struct InputTarget {
+    let pid: pid_t
+    let window: AXUIElement?, element: AXUIElement?
+    let mode: String
+    func mismatch() -> String? {
+        guard let current=inputTarget() else { return "target_unavailable" }
+        guard current.pid == pid else { return "application_changed" }
+        if let window=window {
+            guard let other=current.window, CFEqual(window,other) else { return "window_changed" }
+        }
+        if let element=element {
+            // Web editors may recreate their AX object while retaining keyboard
+            // focus. Compare a stable identifier when exposed, not object identity.
+            // Without one, the current OS focus in this app/window is authoritative.
+            if let other=current.element,
+               let identifier=axValue(element,kAXIdentifierAttribute) as? String,!identifier.isEmpty,
+               let otherIdentifier=axValue(other,kAXIdentifierAttribute) as? String,!otherIdentifier.isEmpty,
+               identifier != otherIdentifier { return "element_changed" }
+        }
+        return nil
+    }
+    func isCurrent() -> Bool { mismatch() == nil }
+}
+
+func inputTarget() -> InputTarget? {
+    guard AXIsProcessTrusted(), !IsSecureEventInputEnabled(),
+          let app=NSWorkspace.shared.frontmostApplication,
+          app.bundleIdentifier != "local.pelotondesk.mac" else { return nil }
     let application=AXUIElementCreateApplication(app.processIdentifier)
+    let window=axElement(axValue(application,kAXFocusedWindowAttribute))
     guard var element=axElement(axValue(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute))
-        ?? axElement(axValue(application,kAXFocusedUIElementAttribute)) else { return nil }
+        ?? axElement(axValue(application,kAXFocusedUIElementAttribute)) else {
+        // Some web/terminal editors do not expose a text field. The OS still
+        // routes Cmd+V to their keyboard focus; retain the app/window guard.
+        return InputTarget(pid:app.processIdentifier,window:window,element:nil,mode:"system")
+    }
     for _ in 0..<4 {
         guard let child=axElement(axValue(element,kAXFocusedUIElementAttribute)), !CFEqual(child,element) else { break }
         element=child
@@ -35,10 +66,14 @@ func focusedField() -> AXUIElement? {
     let role=axValue(element,kAXRoleAttribute) as? String ?? ""
     var writable: DarwinBoolean=false
     AXUIElementIsAttributeSettable(element,kAXSelectedTextAttribute as CFString,&writable)
-    guard ["AXTextField","AXTextArea","AXComboBox"].contains(role) || writable.boolValue else { return nil }
+    // A known non-input control is not a dictation destination. Generic groups,
+    // web areas and unknown roles can contain a keyboard-focused editor.
+    if ["AXButton","AXCheckBox","AXRadioButton","AXMenuItem","AXPopUpButton","AXSlider","AXLink"].contains(role) { return nil }
     var pid: pid_t=0
     AXUIElementGetPid(element,&pid)
-    return pid == app.processIdentifier ? element : nil
+    guard pid == app.processIdentifier else { return nil }
+    let textField=["AXTextField","AXTextArea","AXComboBox"].contains(role) || writable.boolValue
+    return InputTarget(pid:pid,window:window,element:element,mode:textField ? "field" : "system")
 }
 
 func cleanTranscript(_ text: String) -> String {
@@ -67,14 +102,42 @@ func pasteKey() -> CGKeyCode? {
     }
 }
 
-// One paste operation avoids partial Unicode typing. No Return key is sent.
-// A successful result means the paste command was posted, not that the app acknowledged it.
-func insert(_ text: String, into expected: AXUIElement) -> Bool {
-    func sameField() -> Bool { guard let current=focusedField() else { return false }; return CFEqual(current,expected) }
+struct DeliveryResult { var pasted=false, enterPosted=false; var reason="" }
+
+func postReturn(to target:InputTarget,cancelled:()->Bool) -> Bool {
+    guard !cancelled(),target.isCurrent() else { return false }
+    let source=CGEventSource(stateID:.privateState)
+    guard let down=CGEvent(keyboardEventSource:source,virtualKey:CGKeyCode(kVK_Return),keyDown:true),
+          let up=CGEvent(keyboardEventSource:source,virtualKey:CGKeyCode(kVK_Return),keyDown:false) else { return false }
+    down.flags=[];up.flags=[]
+    down.post(tap:.cgSessionEventTap)
+    Thread.sleep(forTimeInterval:0.01)
+    up.post(tap:.cgSessionEventTap)
+    return true
+}
+
+// Keep Return dependent on a completed paste and a fresh focus/cancellation check.
+// Injected operations also let self-tests check ordering without keyboard events.
+func deliver(sendReturn:Bool, ready:()->Bool, paste:()->Bool, settle:()->Void, enter:()->Bool) -> DeliveryResult {
+    guard ready(), paste() else { return DeliveryResult() }
+    settle()
+    return DeliveryResult(pasted:true,enterPosted:sendReturn && ready() && enter())
+}
+
+// A posted shortcut is not proof that the destination accepted the text/message.
+func insert(_ text: String, into expected: InputTarget, sendReturn:Bool, cancelled:()->Bool) -> DeliveryResult {
+    var reason=""
+    func ready() -> Bool {
+        reason = cancelled() ? "cancelled" : expected.mismatch() ?? ""
+        return reason.isEmpty
+    }
     let clean=cleanTranscript(text)
-    guard !clean.isEmpty, AXIsProcessTrusted(), sameField(), let key=pasteKey(),
-          let down=CGEvent(keyboardEventSource:nil,virtualKey:key,keyDown:true),
-          let up=CGEvent(keyboardEventSource:nil,virtualKey:key,keyDown:false) else { return false }
+    let source=CGEventSource(stateID:.privateState)
+    guard !clean.isEmpty else { return DeliveryResult(reason:"empty") }
+    guard ready() else { return DeliveryResult(reason:reason) }
+    guard let key=pasteKey() else { return DeliveryResult(reason:"keyboard_layout") }
+    guard let down=CGEvent(keyboardEventSource:source,virtualKey:key,keyDown:true),
+          let up=CGEvent(keyboardEventSource:source,virtualKey:key,keyDown:false) else { return DeliveryResult(reason:"keyboard_event") }
     let board=NSPasteboard.general
     let saved=(board.pasteboardItems ?? []).map { item in
         item.types.compactMap { type -> (NSPasteboard.PasteboardType,Data)? in
@@ -82,7 +145,7 @@ func insert(_ text: String, into expected: AXUIElement) -> Bool {
         }
     }
     board.clearContents()
-    let wrote=board.setString(clean + " ",forType:.string)
+    let wrote=board.setString(clean + (sendReturn ? "" : " "),forType:.string)
     let generation=board.changeCount
     defer {
         // Keep a newer copy made by the user; never overwrite it with our snapshot.
@@ -93,15 +156,17 @@ func insert(_ text: String, into expected: AXUIElement) -> Bool {
             board.clearContents(); if !items.isEmpty { board.writeObjects(items) }
         }
     }
-    guard wrote else { return false }
+    guard wrote else { return DeliveryResult(reason:"clipboard") }
     Thread.sleep(forTimeInterval:0.05)
-    guard sameField() else { return false }
-    down.flags = .maskCommand; up.flags = .maskCommand
-    down.post(tap:.cgSessionEventTap)
-    Thread.sleep(forTimeInterval:0.01)
-    up.post(tap:.cgSessionEventTap)
-    Thread.sleep(forTimeInterval:0.7)
-    return true
+    var result=deliver(sendReturn:sendReturn,ready:ready,paste:{
+        down.flags = .maskCommand; up.flags = .maskCommand
+        down.post(tap:.cgSessionEventTap)
+        Thread.sleep(forTimeInterval:0.01)
+        up.post(tap:.cgSessionEventTap)
+        return true
+    },settle:{ Thread.sleep(forTimeInterval:0.7) },enter:{ postReturn(to:expected,cancelled:cancelled) })
+    result.reason=reason
+    return result
 }
 
 struct Segmenter {
@@ -114,8 +179,8 @@ struct Segmenter {
         self=Segmenter()
         return result
     }
-    mutating func accept(_ input: [Float]) -> (began: Bool, completed: [Float]?) {
-        guard !input.isEmpty else { return (false,nil) }
+    mutating func accept(_ input: [Float]) -> (began: Bool, completed: [Float]?, ended:Bool) {
+        guard !input.isEmpty else { return (false,nil,false) }
         let rms=sqrt(input.reduce(Float(0)) { $0+$1*$1 } / Float(input.count))
         var began=false
         if !speaking {
@@ -123,29 +188,38 @@ struct Segmenter {
             else {
                 lead.append(contentsOf:input)
                 if lead.count > 3200 { lead.removeFirst(lead.count-3200) }
-                return (false,nil)
+                return (false,nil,false)
             }
         }
         samples.append(contentsOf:input)
         if rms >= threshold { voicedSamples += input.count }
         quietSamples = rms < threshold ? quietSamples+input.count : 0
-        if quietSamples >= 14400 || samples.count >= 320000 { return (began,finish()) }
-        return (began,nil)
+        if quietSamples >= 14400 { return (began,finish(),true) }
+        if samples.count >= 320000 {
+            let chunk=samples
+            // Bound ASR work without treating the 20-second boundary as a pause.
+            samples=[];voicedSamples=0
+            return (began,chunk,false)
+        }
+        return (began,nil,false)
     }
 }
 
 final class Recorder {
     let whisper: String, model: String, engineKind: String
+    let sendReturn: Bool
     let engine=AVAudioEngine()
     let work=DispatchQueue(label:"local.pelotondesk.transcribe"), lock=NSLock()
     let capture=DispatchQueue(label:"local.pelotondesk.audio")
-    var segmenter=Segmenter(), focus: AXUIElement?
+    var segmenter=Segmenter(), focus: InputTarget?
     var pending=0, stopped=false, finishing=false, lastMeter=TimeInterval(0)
     var phrase=0, previewBusy=false, previewAt=TimeInterval(0)
+    var pendingSend: InputTarget? // Accessed only on the serial transcription queue.
     var asrProcess: Process?, asrInput: FileHandle?, asrOutput: FileHandle?
     var child: Process?, signals: [DispatchSourceSignal]=[]
     let directory=FileManager.default.temporaryDirectory.appendingPathComponent("peloton-desk-"+UUID().uuidString)
-    init(whisper:String,model:String,engineKind:String="whisper") { self.whisper=whisper;self.model=model;self.engineKind=engineKind }
+    init(whisper:String,model:String,engineKind:String="whisper",sendReturn:Bool=false) { self.whisper=whisper;self.model=model;self.engineKind=engineKind;self.sendReturn=sendReturn }
+    func cancelled() -> Bool { lock.lock();defer { lock.unlock() };return stopped }
     func workerReply() throws -> [String:Any] {
         guard let output=asrOutput else { throw NSError(domain:"Parakeet",code:1) }
         var line=Data()
@@ -216,7 +290,7 @@ final class Recorder {
                 self.capture.async { self.consume(samples) }
             }
             try engine.start()
-            emit(["type":"voice-state","active":true,"phase":"listening","microphone":AVCaptureDevice.default(for:.audio)?.localizedName ?? "Micro par défaut du Mac","accessibility":AXIsProcessTrusted(),"model":engineKind == "parakeet" ? "Parakeet V3" : "Whisper "+URL(fileURLWithPath:model).lastPathComponent.replacingOccurrences(of:"ggml-",with:"").replacingOccurrences(of:".bin",with:"")])
+            emit(["type":"voice-state","active":true,"phase":"listening","sendReturn":sendReturn,"microphone":AVCaptureDevice.default(for:.audio)?.localizedName ?? "Micro par défaut du Mac","accessibility":AXIsProcessTrusted(),"model":engineKind == "parakeet" ? "Parakeet V3" : "Whisper "+URL(fileURLWithPath:model).lastPathComponent.replacingOccurrences(of:"ggml-",with:"").replacingOccurrences(of:".bin",with:"")])
         } catch { emit(["type":"error","message":"Le micro du Mac n’a pas pu démarrer."]);stop() }
     }
     func consume(_ input:[Float]) {
@@ -231,10 +305,13 @@ final class Recorder {
         }
         if result.began {
             phrase += 1;previewAt=now
-            focus=focusedField()
-            emit(["type":"voice-stage","phase":"speech","targetFound":focus != nil,"message":focus == nil ? "Parole détectée · texte conservé pour copie (champ non reconnu)." : "Parole détectée · champ de texte reconnu."])
+            focus=inputTarget()
+            emit(["type":"voice-stage","phase":"speech","targetFound":focus != nil,"targetMode":focus?.mode ?? "none","message":focus == nil ? "Parole détectée · sélectionnez votre prompt ; texte conservé ici." : "Parole détectée · destination : focus de l’application active."])
         }
-        if let samples=result.completed { enqueue(samples,target:focus);focus=nil }
+        if let samples=result.completed {
+            enqueue(samples,target:focus,endOfUtterance:result.ended)
+            if result.ended { focus=nil }
+        }
         else if segmenter.speaking && now-previewAt >= (engineKind == "parakeet" ? 1.0 : 2.0) && !previewBusy && pending == 0 {
             previewBusy=true;previewAt=now
             let samples=segmenter.samples, currentPhrase=phrase
@@ -242,16 +319,16 @@ final class Recorder {
         }
     }
     // Caller holds lock. A missing target must never discard recorded speech.
-    func enqueue(_ samples:[Float],target:AXUIElement?) {
-        guard !samples.isEmpty else { return }
+    func enqueue(_ samples:[Float],target:InputTarget?,endOfUtterance:Bool=true) {
+        guard !samples.isEmpty || (sendReturn && endOfUtterance) else { return }
         if pending >= 3 {
             emit(["type":"error","message":"Transcription en retard : cette phrase n’a pas été conservée. Attendez avant de reprendre."]); return
         }
         pending += 1
         let currentPhrase=phrase
-        work.async { self.transcribe(samples,target:target,phraseID:currentPhrase) }
+        work.async { self.transcribe(samples,target:target,phraseID:currentPhrase,endOfUtterance:endOfUtterance) }
     }
-    func transcribe(_ samples:[Float],target:AXUIElement?,preview:Int?=nil,phraseID:Int=0) {
+    func transcribe(_ samples:[Float],target:InputTarget?,preview:Int?=nil,phraseID:Int=0,endOfUtterance:Bool=true) {
         let stem=directory.appendingPathComponent(UUID().uuidString)
         let wav=stem.appendingPathExtension("wav"), txt=stem.appendingPathExtension("txt")
         defer {
@@ -259,6 +336,14 @@ final class Recorder {
             lock.lock();if preview != nil { previewBusy=false } else { pending -= 1 };child=nil;lock.unlock()
         }
         lock.lock();let cancelled=stopped || (preview != nil && (preview != phrase || finishing));lock.unlock();if cancelled { return }
+        if samples.isEmpty {
+            if endOfUtterance,sendReturn,let target=pendingSend {
+                let sent=postReturn(to:target,cancelled:self.cancelled)
+                emit(["type":"voice-stage","phase":"submit","enterPosted":sent,"message":sent ? "Entrée envoyée à l’application active." : "Focus modifié · aucun envoi automatique."])
+            }
+            pendingSend=nil
+            return
+        }
         let began=ProcessInfo.processInfo.systemUptime
         do {
             guard let format=AVAudioFormat(commonFormat:.pcmFormatFloat32,sampleRate:16000,channels:1,interleaved:false),
@@ -296,9 +381,10 @@ final class Recorder {
                 lock.lock();let current = !stopped && phrase == preview && segmenter.speaking;lock.unlock()
                 if current && !text.isEmpty { emit(["type":"transcription-preview","text":text,"phraseId":preview,"elapsedMs":Int((ProcessInfo.processInfo.systemUptime-began)*1000)]) }
             } else if mayInsert {
-                let posted = !text.isEmpty && target.map { insert(text,into:$0) } == true
-                let message = text.isEmpty ? "Aucun texte reconnu." : posted ? "Collage envoyé au champ actif." : "Texte reconnu · conservé ici, aucun collage automatique."
-                emit(["type":"transcription","phraseId":phraseID,"inserted":posted,"text":text,"message":message,"targetFound":target != nil,"elapsedMs":Int((ProcessInfo.processInfo.systemUptime-began)*1000)])
+                let result = target.map { insert(text,into:$0,sendReturn:sendReturn && endOfUtterance,cancelled:self.cancelled) } ?? DeliveryResult()
+                pendingSend = sendReturn && !endOfUtterance && result.pasted ? target : nil
+                let message = text.isEmpty ? "Aucun texte reconnu." : result.enterPosted ? "Collage puis Entrée envoyés à l’application active." : result.pasted ? "Collage envoyé au champ actif." : "Texte reconnu · conservé ici, aucun collage automatique."
+                emit(["type":"transcription","phraseId":phraseID,"inserted":result.pasted,"enterPosted":result.enterPosted,"deliveryReason":result.reason,"text":text,"message":message,"targetFound":target != nil,"targetMode":target?.mode ?? "none","elapsedMs":Int((ProcessInfo.processInfo.systemUptime-began)*1000)])
             }
         } catch {
             lock.lock();let cancelled=stopped;lock.unlock()
@@ -562,7 +648,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 }
 
 let args=CommandLine.arguments
-if args.contains("--self-test") {
+if args.contains("--check-input-config") {
+    // No focus lookup, clipboard access, microphone or input events.
+    emit(["accessibility":AXIsProcessTrusted(),"pasteKeyAvailable":pasteKey() != nil])
+} else if args.contains("--self-test") {
+    var deliveryEvents=[String](), destinationCurrent=true
+    func deliveryTest(send:Bool=true,pasteSucceeds:Bool=true,changeFocus:Bool=false) -> DeliveryResult {
+        deliveryEvents=[];destinationCurrent=true
+        return deliver(sendReturn:send,ready:{ destinationCurrent },paste:{
+            deliveryEvents.append("paste");return pasteSucceeds
+        },settle:{
+            deliveryEvents.append("settle");if changeFocus { destinationCurrent=false }
+        },enter:{ deliveryEvents.append("enter");return true })
+    }
+    precondition(deliveryTest().enterPosted && deliveryEvents == ["paste","settle","enter"])
+    let pasteOnly=deliveryTest(send:false)
+    precondition(pasteOnly.pasted && !pasteOnly.enterPosted && deliveryEvents == ["paste","settle"])
+    precondition(!deliveryTest(pasteSucceeds:false).pasted && deliveryEvents == ["paste"])
+    let moved=deliveryTest(changeFocus:true)
+    precondition(moved.pasted && !moved.enterPosted && deliveryEvents == ["paste","settle"])
+    let cancelled=deliver(sendReturn:true,ready:{ false },paste:{ fatalError("Paste after cancellation") },settle:{},enter:{ fatalError("Return after cancellation") })
+    precondition(!cancelled.pasted && !cancelled.enterPosted)
     precondition(cleanTranscript("  Bonjour\nça marche\t!  ")=="Bonjour ça marche !")
     precondition(cleanTranscript("[BLANK_AUDIO]").isEmpty)
     var segmenter=Segmenter()
@@ -577,7 +683,12 @@ if args.contains("--self-test") {
     _=tail.accept(Array(repeating:Float(0.01),count:8000))
     precondition(tail.finish().count == 8000)
     precondition(tail.finish().isEmpty)
-    print("Voice segmentation checks passed; no microphone or input events used.")
+    var longPhrase=Segmenter()
+    let chunk=longPhrase.accept(Array(repeating:Float(0.05),count:320000))
+    precondition(chunk.completed?.count == 320000 && !chunk.ended && longPhrase.speaking)
+    let pause=longPhrase.accept(Array(repeating:Float(0),count:16000))
+    precondition(pause.ended && pause.completed?.isEmpty == true && !longPhrase.speaking)
+    print("Voice segmentation and paste/Return sequencing checks passed; no microphone or input events used.")
 } else if args.count==5 && ["--check-audio","--check-parakeet"].contains(args[1]) {
     // Offline fixture check: no microphone, focus lookup or input injection.
     do {
@@ -591,8 +702,8 @@ if args.contains("--self-test") {
         if recorder.asrProcess?.isRunning == true { recorder.asrProcess?.terminate() }
         try? FileManager.default.removeItem(at:recorder.directory)
     } catch { print("Audio fixture check failed.");exit(1) }
-} else if args.count==4 && ["--voice","--voice-parakeet"].contains(args[1]) {
-    let recorder=Recorder(whisper:args[2],model:args[3],engineKind:args[1]=="--voice-parakeet" ? "parakeet" : "whisper");recorder.begin();RunLoop.main.run()
+} else if (args.count==4 || (args.count==5 && args[4]=="--send-return")) && ["--voice","--voice-parakeet"].contains(args[1]) {
+    let recorder=Recorder(whisper:args[2],model:args[3],engineKind:args[1]=="--voice-parakeet" ? "parakeet" : "whisper",sendReturn:args.contains("--send-return"));recorder.begin();RunLoop.main.run()
 } else if args.contains("--enable-login") || args.contains("--login-status") {
     do {
         if args.contains("--enable-login") && SMAppService.mainApp.status != .enabled {

@@ -11,7 +11,9 @@
 - Conserver appareils, jetons, modèles, captures et journaux dans `.local/`, ignoré.
   Ne jamais afficher les jetons ni les inclure dans les exceptions ou journaux.
 - Ne pas enregistrer de micro ni injecter du texte pour un test sans déclenchement
-  explicite de l’utilisateur. Vérifier le focus avant insertion et ne pas envoyer le texte.
+  explicite de l’utilisateur. Vérifier le focus avant insertion. Entrée automatique
+  uniquement si l’utilisateur a activé ce mode pour la session ; ce comportement
+  a été demandé explicitement pour les prompts d’IA.
 - Documenter séparément ce qui passe en test et ce qui a été vérifié sur matériel.
 - Sur ce Mac, préserver le serveur ADB démarré depuis le Terminal autorisé au réseau local.
 

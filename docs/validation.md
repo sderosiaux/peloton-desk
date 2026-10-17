@@ -56,6 +56,19 @@ Conserver les résultats personnels dans `.local/validation.md`.
 - [x] Tests : arrêt avec fin de phrase, annulation pendant la demande de permission,
   conservation temporaire du texte et absence de transcript dans les journaux.
 - [ ] Dictée insérée dans un champ de test vide, après renouvellement de l’autorisation.
+- [x] Essai manuel Parakeet sur le micro Mac : plusieurs phrases transcrites en
+  70–94 ms ; aucun collage car l’ancienne détection rejetait la cible.
+- [x] Nouvelle détection du focus système : réponse dictée dans le champ actif de
+  Codex, collée puis envoyée avec Entrée. Réception et envoi confirmés par
+  l’utilisateur le 17 octobre 2026 ; journal `inserted:true`, `enterPosted:true`,
+  aucun motif de refus, traitement final de 906 ms incluant l’attente du collage.
+  Le premier essai avait reconnu la cible mais refusé le collage ; la comparaison
+  d’identité des objets AX a été remplacée par leur identifiant stable.
+- [x] Tests sans clavier réel : collage avant Entrée, absence d’Entrée sans option
+  explicite, après échec de collage, annulation ou changement de focus ; une phrase
+  continue de plus de 20 secondes reste ouverte jusqu’à une pause.
+- [x] Option Entrée : envoi dans Codex confirmé par l’utilisateur (app inaccessible
+  à l’outil de contrôle ; le test a été déclenché par l’utilisateur).
 - [ ] Aperçu Parakeet pendant une phrase longue et qualité sur le micro réel.
 - [ ] Paroles françaises et anglaises correctement transcrites pendant le pédalage.
 - [ ] Changer de champ pendant une transcription empêche l’insertion automatique.

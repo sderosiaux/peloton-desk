@@ -69,6 +69,16 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
         response = await self.client.post('/api/auth', json={'token': 'é🚲'}, headers={'Origin': self.origin})
         self.assertEqual(response.status, 403)
 
+    async def test_auto_send_requires_explicit_boolean_for_this_recording(self):
+        await self.authenticate()
+        voice = self.app[VOICE]
+        for body, enabled in [({}, False), ({'sendReturn': False}, False),
+                              ({'sendReturn': 'true'}, False), ({'sendReturn': True}, True)]:
+            with self.subTest(body=body), patch.object(voice, 'start', new_callable=AsyncMock) as start:
+                response = await self.client.post('/api/voice/start', json=dict(body, source='mac'), headers={'Origin': self.origin})
+                self.assertEqual(response.status, 200)
+                start.assert_awaited_once_with('mac', send_return=enabled)
+
     async def test_concurrent_voice_requests_start_only_one_recorder_and_stop_it(self):
         class Recorder:
             def __init__(self):

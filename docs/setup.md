@@ -96,13 +96,26 @@ explicite de l’écoute.
 
 Le bouton **Dictée** du Bike active l’écoute jusqu’à son arrêt. L’aperçu provisoire
 est calculé environ toutes les secondes avec Parakeet, toutes les deux secondes avec Whisper ; un aperçu encore en cours n’est pas
-empilé dans une file d’attente. Une pause de 900 ms termine une phrase, ou un segment
-de 20 secondes en cas de parole continue. Le texte provisoire peut changer.
+empilé dans une file d’attente. Une pause de 900 ms termine une phrase. En cas de
+parole continue, les segments de 20 secondes sont transcrits et collés sans envoyer
+Entrée ; l’envoi attend la pause ou le bouton Terminer. Le texte provisoire peut changer.
 
-Le collage final vérifie le même champ avant ⌘V, avec la disposition de clavier
-active. Il ne presse jamais Entrée. La transmission d’un raccourci ne prouve pas
+Le collage final vérifie l’application, la fenêtre et l’identifiant du champ (s’il existe) avant
+⌘V, avec la disposition de clavier active. Un éditeur web ou terminal peut ne pas
+exposer un champ texte classique : dans ce cas, ⌘V est dirigé vers son focus système.
+Sans identifiant de champ stable, seule l’application et sa fenêtre (si disponible)
+peuvent être comparées ; un déplacement de curseur au sein du même éditeur n’est
+pas détecté. Les contrôles non textuels reconnus, champs sécurisés et l’app de dictée
+elle-même sont exclus.
+
+**Envoyer avec Entrée après chaque phrase** ajoute Entrée 700 ms après le collage,
+après un nouveau contrôle du focus et de l’annulation. Cette option est choisie
+avant de démarrer l’écoute, dans la fenêtre Mac ou les réglages du Bike.
+Elle est désactivée par défaut ; `"sendReturn":true` dans `.local/voice.json` fournit
+une préférence initiale explicite, que la case permet de changer.
+La transmission d’un raccourci ne prouve pas
 que l’application destinataire a effectivement accepté le collage : le texte reste
-visible dans la fenêtre Mac. Si le champ est absent ou a changé, l’audio est tout
+visible dans la fenêtre Mac. Si la cible est exclue ou a changé, l’audio est tout
 de même transcrit et le texte conservé pour copie. Depuis le Bike, utiliser aussi
 `··· → Insérer la dictée en attente` après avoir sélectionné le champ voulu.
 
@@ -157,7 +170,8 @@ make app-test
 ```
 
 Les journaux du compagnon restent dans `.local/companion.log`. Ils indiquent les
-étapes, les durées, le nombre de caractères et la présence d’un champ cible, sans
+étapes, les durées, le nombre de caractères, la présence d’une cible et le motif
+d’un refus de collage (`deliveryReason`), sans
 texte dicté ni audio. Les vingt dernières phrases restent en mémoire dix minutes ;
 la fenêtre Mac les affiche, et l’API authentifiée `/api/voice/history` permet le
 diagnostic. Les fichiers audio temporaires sont supprimés après traitement ou arrêt

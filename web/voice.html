@@ -4,9 +4,10 @@
 <body class="voice-test">
 <main>
   <span class="eyebrow">PELOTON DESK · SUR CE MAC</span>
-  <h1>Parlez. Le texte reste ici.</h1>
+  <h1>Dictez dans votre app.</h1>
   <span id="model" class="eyebrow">MODÈLE LOCAL</span>
-  <p>Démarrez l’écoute, puis cliquez dans votre prompt et parlez. Une pause termine la phrase. Le collage se fait si le champ reste actif ; l’envoi reste manuel.</p>
+  <p>Démarrez l’écoute, puis cliquez dans votre prompt et parlez. Une pause termine la phrase et colle le texte au focus de l’application active.</p>
+  <label class="send-option"><input id="send-return" type="checkbox"> Envoyer avec Entrée après chaque phrase</label>
   <div class="test-controls"><button id="start" class="primary" disabled>Démarrer la dictée</button><button id="cancel" class="quiet" hidden>Annuler</button></div>
   <div class="audio-card"><div class="audio-header"><span id="microphone">Micro du Mac</span><span id="db">— dB</span></div><meter id="level" min="-60" max="0" low="-42" high="-12" optimum="-20" value="-60" aria-label="Niveau du micro"></meter><p id="stage" role="status">Connexion au compagnon…</p></div>
   <div id="preview" class="live-preview" role="status" hidden><span class="eyebrow">EN COURS · PROVISOIRE</span><p id="preview-text"></p></div>

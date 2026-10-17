@@ -59,7 +59,7 @@ class Voice:
             asyncio.get_running_loop().call_later(600, self.expire_history)
         if event['type'] not in ('audio-level', 'transcription-preview'):
             # Deliberately omit transcript, audio, paths and credentials from disk logs.
-            record = {key: event[key] for key in ('type', 'phase', 'active', 'targetFound', 'inserted', 'audioSeconds', 'elapsedMs', 'code') if key in event}
+            record = {key: event[key] for key in ('type', 'phase', 'active', 'targetFound', 'targetMode', 'inserted', 'enterPosted', 'deliveryReason', 'sendReturn', 'audioSeconds', 'elapsedMs', 'code') if key in event}
             record['at'] = time.time()
             if 'text' in event: record['characters'] = len(event['text'])
             print(json.dumps(record, ensure_ascii=False), flush=True)
@@ -71,19 +71,19 @@ class Voice:
         while self.history and time.time() - self.history[0]['at'] >= 600:
             self.history.popleft()
 
-    async def start(self, source='bike'):
+    async def start(self, source='bike', send_return=False):
         async with self.lifecycle:
             if self.process and self.source != source:
                 raise web.HTTPConflict(text=json.dumps({'error': 'La dictée est déjà utilisée sur l’autre écran.'}), content_type='application/json')
             self.source = source
             self.cancel_start = False
             try:
-                await self._start()
+                await self._start(send_return=send_return)
             except Exception:
                 await self.emit({'type': 'voice-state', 'active': False, 'phase': 'idle'})
                 raise
 
-    async def _start(self):
+    async def _start(self, send_return=False):
         if self.process and self.process.returncode is None:
             return
         binary, whisper, model = self.paths()
@@ -108,9 +108,9 @@ class Voice:
                 await asyncio.sleep(0.2)
             else:
                 raise web.HTTPConflict(text=json.dumps({'error': 'Terminez la demande d’autorisation du micro sur le Mac, puis réessayez.'}), content_type='application/json')
-        self.process = await asyncio.create_subprocess_exec(
-            str(binary), '--voice-parakeet' if self.config().get('engine') == 'parakeet' else '--voice', str(whisper), str(model),
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+        arguments = [str(binary), '--voice-parakeet' if self.config().get('engine') == 'parakeet' else '--voice', str(whisper), str(model)]
+        if send_return is True: arguments.append('--send-return')
+        self.process = await asyncio.create_subprocess_exec(*arguments, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
         self.reader = asyncio.create_task(self.read_events(self.process))
 
     async def read_events(self, process):
@@ -233,7 +233,8 @@ async def status(request):
     ready = all(p.exists() for p in request.app[VOICE].paths())
     voice_ready, detail = voice_readiness(ready)
     model_name = 'Parakeet V3' if request.app[VOICE].config().get('engine') == 'parakeet' else 'Whisper ' + request.app[VOICE].paths()[2].stem.removeprefix('ggml-')
-    return web.json_response({'vncAvailable': available, 'voiceReady': voice_ready, 'voiceDetail': detail, 'voiceModel': model_name})
+    return web.json_response({'vncAvailable': available, 'voiceReady': voice_ready, 'voiceDetail': detail, 'voiceModel': model_name,
+                             'voiceAutoSend': request.app[VOICE].config().get('sendReturn') is True})
 
 
 async def proxy(request):
@@ -307,7 +308,7 @@ async def events(request):
 
 async def voice_start(request):
     data = await request.json()
-    await request.app[VOICE].start('mac' if data.get('source') == 'mac' else 'bike')
+    await request.app[VOICE].start('mac' if data.get('source') == 'mac' else 'bike', send_return=data.get('sendReturn') is True)
     return web.json_response({'ok': True})
 
 

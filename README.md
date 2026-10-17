@@ -43,9 +43,17 @@ Pour conserver tous les pixels : **Image exacte** dans `···`, puis reconnecte
 La dictée montre un **aperçu provisoire pendant la parole**, rafraîchi environ
 toutes les secondes avec Parakeet V3, toutes les deux secondes avec Whisper si le moteur suit.
 Une pause de 900 ms termine la phrase.
-Le texte final est collé avec ⌘V si le champ sélectionné n’a pas changé ; le
+Le texte final est collé avec ⌘V au focus système si la cible n’a pas changé ; le
 presse-papiers précédent est ensuite restauré, sauf si vous avez copié autre chose.
-Sans champ reconnu, la transcription reste récupérable. L’envoi reste manuel.
+Les éditeurs qui n’exposent pas un champ texte classique utilisent le focus clavier
+de l’application active. Son identifiant de champ est comparé s’il est disponible ;
+sinon, seul le maintien de l’application et de sa fenêtre peut être vérifié.
+La transcription reste récupérable si le collage est annulé.
+
+L’option **Envoyer avec Entrée après chaque phrase**, dans la fenêtre Mac ou les
+réglages du Bike, colle puis appuie sur Entrée après une pause. Elle est désactivée
+par défaut, sauf préférence locale explicite. La cible est revérifiée avant Entrée.
+Décocher cette option pour relire le prompt avant de l’envoyer.
 
 Le menu **Icône vélo → Tester la dictée sur le Mac…** ouvre une fenêtre flottante
 avec niveau du micro, aperçu, phrases reconnues et bouton Copier. Elle fonctionne
@@ -53,7 +61,7 @@ sans le Bike : démarrer, sélectionner son prompt, puis parler. **Terminer** ga
 la dernière phrase ; **Annuler**, fermer la fenêtre ou perdre la connexion annule
 le travail restant. Le micro est toujours celui du **Mac**.
 
-## État vérifié le 16 octobre 2026
+## État vérifié le 17 octobre 2026
 
 - APK compilé, signé et installé sur un Bike PLTN-RB1VQ, Android 11 / API 30.
 - Compagnon installé dans `/Applications/Peloton Desk Mac.app` et serveur actif.
@@ -65,6 +73,8 @@ le travail restant. Le micro est toujours celui du **Mac**.
   modèles existants du cache FluidAudio réutilisés. Whisper `base` reste disponible.
 - Audio du micro Mac transcrit lors d’un essai manuel avec Whisper ; autorisations
   Microphone et Accessibilité reconnues après installation de Parakeet.
+- Dictée Parakeet dans le champ actif de Codex : collage puis Entrée confirmés
+  par l’utilisateur, avec l’option d’envoi automatique activée.
 - Tests des outils, du tunnel, des protections HTTP, du chronomètre et de la segmentation réussis.
 - Optimisation VNC vérifiée sur un flux réel de 3024 × 1964 : première image
   de 422 584 octets, puis mises à jour de 16 782, 3 776 et 4 octets lorsque
@@ -124,7 +134,8 @@ accessible sur le réseau selon les réglages du Mac. Le mot de passe VNC n’es
 conservé par l’app. Garder le Mac éveillé et sa session ouverte.
 
 La dictée utilise un seuil d’énergie sonore simple. Son comportement face au bruit
-du pédalage reste à tester. Les phrases sont limitées à 20 secondes, avec au plus
+du pédalage reste à tester. L’audio est traité par segments d’au plus 20 secondes,
+sans envoyer Entrée avant la pause, avec au plus
 trois transcriptions finales en cours ou en attente. Une seule prévisualisation peut être en cours. Les extraits audio sont temporaires et
 supprimés après traitement ou arrêt normal. Les vingt dernières transcriptions restent accessibles dix minutes en mémoire,
 sans fichier d’historique. La qualité et le focus doivent être
