@@ -182,10 +182,9 @@ automatiquement la séance en pause. `···` remet le compteur à zéro et réa
 démarrage au pédalage. Le temps pédalé avant l’ouverture de l’app n’est pas reconstruit.
 La barre affiche aussi la puissance instantanée en watts fournie par le Bike.
 
-Les **kcal estimées** cumulent l’énergie produite pendant la séance, avec une
-jauge vers **200 kcal** par défaut. L’objectif se modifie dans `···` et reste
-mémorisé. Le total continue au-delà de l’objectif, qui devient « Objectif atteint »
-sans interrompre le bureau. « Nouvelle séance » remet durée et calories à zéro.
+Les **kcal estimées** cumulent l’énergie produite pendant la séance. Le total
+s’affiche avec une décimale pour rendre visibles les premiers dixièmes de kcal,
+sans objectif ni jauge. « Nouvelle séance » remet durée et calories à zéro.
 La puissance est intégrée entre deux mesures valides, par moyenne des deux valeurs ;
 les pauses manuelles, mesures absentes et intervalles supérieurs à 2,5 secondes
 ne sont pas comblés. Seuls les joules cumulés sont sauvegardés : réouvrir l’app
@@ -213,7 +212,7 @@ adb -s "$SERIAL" shell dumpsys activity local.pelotondesk
 
 `bike` contient les mesures natives ; `bar` contient celles transmises à la
 barre ainsi que `elapsedMs`, `running` et `manualPause`. `energy` expose
-les joules cumulés, les kcal estimées et l’objectif. `barAgeMs` indique
+les joules cumulés et les kcal estimées. `barAgeMs` indique
 l’âge du dernier rafraîchissement (environ 500 ms maximum hors ralentissement).
 Une barre absente ou ancienne alors que les capteurs sont actifs signale un
 problème côté interface, pas nécessairement une panne des capteurs.

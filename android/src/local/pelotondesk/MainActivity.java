@@ -99,10 +99,10 @@ public class MainActivity extends Activity {
                 renderedMetrics = value.toString(); renderedAt = android.os.SystemClock.elapsedRealtime();
             } catch (Exception ignored) { }
         }
-        @JavascriptInterface public void reportEnergy(double joules, double kcal, int goal) {
+        @JavascriptInterface public void reportEnergy(double joules, double kcal) {
             try {
                 JSONObject value = new JSONObject();
-                value.put("joules", joules); value.put("kcal", kcal); value.put("goal", goal);
+                value.put("joules", joules); value.put("kcal", kcal);
                 renderedEnergy = value.toString();
             } catch (Exception ignored) { }
         }

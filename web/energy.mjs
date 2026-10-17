@@ -16,7 +16,3 @@ export function accumulateEnergy(state, power, now, active) {
   return { joules: state.joules + added, previous: { at: now, power } };
 }
 export function calories(joules) { return joules / (4184 * EFFICIENCY); }
-export function calorieGoal(value) {
-  const goal = Number(value);
-  return Number.isFinite(goal) && goal >= 1 && goal <= 10000 ? Math.round(goal) : 200;
-}

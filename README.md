@@ -94,9 +94,9 @@ le travail restant. Le micro est toujours celui du **Mac**.
   conservée, seconde collée et envoyée, vérifié dans la même session.
 - Dictée envoyée depuis le Bike pendant le pédalage, confirmée par réception des
   messages et journaux de collage/Entrée. Filtrage des interjections ajouté ensuite.
-- Kcal estimées cumulées avec objectif modifiable (200 par défaut), total mémorisé
-  et remise à zéro de séance. Calcul, interruptions et restauration testés ;
-  présentation et modification de l’objectif vérifiées dans le navigateur.
+- Kcal estimées cumulées affichées au dixième, total mémorisé et remise à zéro
+  de séance. Calcul, interruptions et restauration testés. Un cumul réel de
+  0,89 kcal a confirmé le besoin d’afficher les décimales auparavant masquées.
 - Tests des outils, du tunnel, des protections HTTP, du chronomètre et de la segmentation réussis.
 - Optimisation VNC vérifiée sur un flux réel de 3024 × 1964 : première image
   de 422 584 octets, puis mises à jour de 16 782, 3 776 et 4 octets lorsque

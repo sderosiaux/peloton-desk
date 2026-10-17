@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { energyState, accumulateEnergy, calories, calorieGoal } from '../energy.mjs';
+import { energyState, accumulateEnergy, calories } from '../energy.mjs';
 
 test('100 W for ten minutes accumulates 60 kJ, about 59.75 estimated kcal', () => {
   let s = energyState();
@@ -39,9 +39,4 @@ test('zero power stays flat; restore preserves total without bridging sessions',
   assert.equal(s.joules, 5000);
   for (const saved of ['bad', -1, Infinity]) assert.equal(energyState(saved).joules, 0);
   assert.equal(energyState().joules, 0);
-});
-test('goals default to 200 and reject invalid stored values', () => {
-  for (const value of [null, '', 'bad', -1, 0, Infinity, 10001]) assert.equal(calorieGoal(value), 200);
-  assert.equal(calorieGoal('300'), 300);
-  assert.equal(calorieGoal(250.4), 250);
 });
