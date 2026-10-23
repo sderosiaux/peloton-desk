@@ -19,7 +19,14 @@ export function fastDesktop(BaseRFB) {
       BaseRFB.messages.clientEncodings(this._sock, [1, 6, 0, -223, -224, -239]);
     }
     _requestFrame(incremental = true) {
+      if (this._focusPaused) return;
       BaseRFB.messages.fbUpdateRequest(this._sock, incremental, 0, 0, this._fbWidth, this._fbHeight);
+    }
+    setFocusPaused(paused) {
+      if (this._focusPaused === paused) return;
+      const wasPaused = this._focusPaused;
+      this._focusPaused = paused;
+      if (!paused && wasPaused) { this._requestedAhead = null; this._requestFrame(false); }
     }
     _normalMsg() {
       // noVNC normally polls only after receiving a whole frame. Ask once as

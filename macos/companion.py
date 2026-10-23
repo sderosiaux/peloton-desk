@@ -16,8 +16,10 @@ from aiohttp import web, WSMsgType
 
 try:
     from .vnc import fast_desktop, ProtocolError, ClientUpdates
+    from .music import Music
 except ImportError:  # Direct execution by the native companion.
     from vnc import fast_desktop, ProtocolError, ClientUpdates
+    from music import Music
 
 ROOT = Path(__file__).resolve().parents[1]
 PORT = 8765
@@ -25,6 +27,7 @@ TOKEN = web.AppKey('token', str)
 ORIGIN = web.AppKey('origin', str)
 CLIENTS = web.AppKey('clients', set)
 SOCKETS = web.AppKey('sockets', set)
+MUSIC = web.AppKey('music', Music)
 
 
 class Voice:
@@ -180,8 +183,8 @@ def authenticated(request):
 async def guard(request, handler):
     if request.host != request.app[ORIGIN].removeprefix('http://'):
         return web.json_response({'error': 'Hôte refusé.'}, status=403)
-    sensitive = request.path.startswith('/api/') or request.path in ('/vnc', '/events')
-    if (sensitive and request.method != 'GET') or request.path in ('/vnc', '/events'):
+    sensitive = request.path.startswith('/api/') or request.path in ('/vnc', '/events', '/music')
+    if (sensitive and request.method != 'GET') or request.path in ('/vnc', '/events', '/music'):
         if request.headers.get('Origin') != request.app[ORIGIN]:
             return web.json_response({'error': 'Origine refusée.'}, status=403)
     if sensitive and request.path != '/api/auth' and not authenticated(request):
@@ -306,6 +309,34 @@ async def events(request):
     return ws
 
 
+async def music_events(request):
+    ws = web.WebSocketResponse(heartbeat=5, max_msg_size=1024)
+    await ws.prepare(request)
+    request.app[SOCKETS].add(ws)
+    music = request.app[MUSIC]
+    queue = await music.subscribe()
+
+    async def send():
+        while True:
+            await asyncio.wait_for(ws.send_json(await queue.get()), 2)
+
+    async def receive():
+        async for _ in ws:
+            pass
+
+    tasks = [asyncio.create_task(send()), asyncio.create_task(receive())]
+    try:
+        await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        await music.unsubscribe(queue)
+        request.app[SOCKETS].discard(ws)
+        await ws.close()
+    return ws
+
+
 async def voice_start(request):
     data = await request.json()
     await request.app[VOICE].start('mac' if data.get('source') == 'mac' else 'bike', send_return=data.get('sendReturn') is True)
@@ -332,6 +363,7 @@ async def voice_stop(request):
 
 async def cleanup(app):
     await app[VOICE].stop()
+    await app[MUSIC].stop()
     for ws in tuple(app[SOCKETS]):
         await ws.close()
 
@@ -340,8 +372,9 @@ def create_app(token, origin=f'http://127.0.0.1:{PORT}'):
     app = web.Application(middlewares=[guard], client_max_size=16384)
     app[TOKEN], app[ORIGIN], app[CLIENTS], app[SOCKETS] = token, origin, set(), set()
     app[VOICE] = Voice(app)
+    app[MUSIC] = Music()
     app.add_routes([web.post('/api/auth', auth), web.get('/api/status', status),
-        web.get('/vnc', proxy), web.get('/events', events),
+        web.get('/vnc', proxy), web.get('/events', events), web.get('/music', music_events),
         web.post('/api/voice/start', voice_start), web.post('/api/voice/stop', voice_stop),
         web.post('/api/voice/finish', voice_finish), web.get('/api/voice/history', voice_history)])
     async def index(request):

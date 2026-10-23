@@ -44,6 +44,37 @@ l’image courante, avec au plus une demande anticipée hors redimensionnement.
 Les zones unies utilisent une couleur RGB et les petits rectangles sont regroupés
 dans les messages réseau. Le client attend le rendu précédent avant de poursuivre.
 
+Deux flèches **Onglet précédent / Onglet suivant** apparaissent à droite dans la
+barre quand le bureau est connecté, à côté du bouton de dictée réduit à son icône.
+Touchez d’abord Ghostty sur le bureau,
+puis utilisez ces boutons : ils envoient les raccourcis de navigation à l’application
+active du Mac. Leur affichage se désactive dans `···`. La taille du bureau est conservée.
+
+La vitesse, la résistance et la cadence ont une courbe discrète en arrière-plan,
+sans agrandir la barre. La durée et les kcal restent numériques ; la puissance
+n’est pas affichée. Chaque courbe montre les **15 dernières minutes**, du passé à gauche au présent à droite,
+avec un point toutes les cinq secondes et une échelle propre à chaque indicateur.
+Les courbes se remplissent au fil des mesures ; les interruptions restent visibles
+sous forme de blancs. L’historique récent est conservé localement sur le Bike ;
+**Nouvelle séance** efface aussi les courbes.
+
+Le bouton en forme de cible active **Ultra focus RPM**. Le bureau cède la place à
+un paysage animé par le son de **Spotify sur le Mac** : flux rapide, basses profondes,
+passages calmes et montées d’énergie se mélangent automatiquement. La cadence réelle
+reste au centre. Quand le tempo est suffisamment net, un repère RPM en propose une
+subdivision proche de votre cadence ; il disparaît pendant les breaks et les coupures.
+Ce repère n’est pas une mesure de la position des pédales ni une commande de résistance.
+Le bouton **Bureau** revient à la connexion conservée ; les demandes d’images du
+mode bureau fluide sont suspendues pendant l’immersion.
+
+Au premier lancement, macOS peut demander l’accès à l’audio système pour
+**Peloton Desk Mac**. Ultra focus capture uniquement la sortie audio des processus
+Spotify (macOS 14.2 minimum). Le micro n’est pas utilisé, la musique n’est pas
+enregistrée et seuls des indicateurs numériques sont envoyés au Bike. La capture
+s’arrête au retour au bureau, à la mise en arrière-plan ou après déconnexion.
+La détection est locale et s’adapte au fil de l’écoute, sans compte développeur
+Spotify, téléchargement de modèle ni choix manuel d’ambiance.
+
 La dictée montre un **aperçu provisoire pendant la parole**, rafraîchi environ
 toutes les secondes avec Parakeet V3, toutes les deux secondes avec Whisper si le moteur suit.
 Une pause de 900 ms termine la phrase. La destination est le champ actif à cette

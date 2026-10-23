@@ -16,6 +16,15 @@
     </div>
     <span class="local-note">Chez vous. Sur votre réseau.</span>
   </section>
+  <section id="focus" aria-label="Ultra focus RPM" hidden>
+    <canvas role="img" aria-label="Paysage animé par le rythme, les basses et l’énergie de Spotify"></canvas>
+    <header class="focus-header"><span>ULTRA FOCUS <b>RPM</b></span><button id="focus-exit">↩ Bureau</button></header>
+    <div class="focus-listening"><span id="focus-status" role="status">Connexion au son de Spotify…</span><button id="focus-retry" hidden>Réessayer</button></div>
+    <div class="focus-center"><span class="focus-caption">CADENCE</span><strong id="focus-rpm">—</strong><span class="focus-unit">RPM</span>
+      <div class="focus-guide"><span id="focus-cue">À ton rythme</span><small id="focus-mapping"></small></div><i id="focus-beat" aria-hidden="true"></i>
+    </div>
+    <div class="focus-bottom"><span id="focus-scene">À ton rythme</span><span id="focus-bpm"></span></div>
+  </section>
   <div id="notice" role="status" hidden></div>
   <div id="live-transcript" class="live-preview" role="status" hidden><span class="eyebrow">DICTÉE · EN COURS</span><p id="live-text"></p></div>
   <aside class="dock" aria-label="Session et métriques">
@@ -24,11 +33,15 @@
     <span class="divider"></span>
     <div class="metric speed-metric"><span class="label">VITESSE <small>EST.</small></span><strong><span id="speed">—</span><small>km/h</small></strong></div>
     <div class="metric resistance-metric"><span class="label">RÉSISTANCE</span><strong id="resistance">—</strong></div>
-    <div class="metric"><span class="label">PUISSANCE</span><strong><span id="power">—</span><small>W</small></strong></div>
-    <div class="metric secondary"><span class="label">CADENCE</span><strong><span id="cadence">—</span><small>rpm</small></strong></div>
+    <div class="metric cadence-metric"><span class="label">CADENCE</span><strong><span id="cadence">—</span><small>rpm</small></strong></div>
     <div class="metric"><span class="label">KCAL EST.</span><strong id="calories">0,0</strong></div>
     <span class="divider"></span>
-    <button id="voice" class="voice" aria-pressed="false"><svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></svg><span id="voice-label">Dictée</span></button>
+    <button id="focus-toggle" class="focus-toggle" aria-label="Ultra focus RPM" title="Ultra focus RPM" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg></button>
+    <button id="voice" class="voice" aria-label="Démarrer la dictée" title="Démarrer la dictée" aria-pressed="false"><svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></svg></button>
+    <nav id="tab-navigation" class="tab-navigation" aria-label="Onglets de l’application active du Mac" hidden>
+      <button id="previous-tab" aria-label="Onglet précédent" title="Onglet précédent" disabled><span aria-hidden="true">‹</span></button>
+      <button id="next-tab" aria-label="Onglet suivant" title="Onglet suivant" disabled><span aria-hidden="true">›</span></button>
+    </nav>
     <button id="settings" class="settings" aria-label="Réglages de la session">···</button>
   </aside>
   <dialog id="password-dialog"><form id="password-form">
@@ -42,7 +55,11 @@
     <span class="eyebrow">VOTRE SESSION</span><h2>Tout à portée de main.</h2>
     <p id="sensor-status">Capteurs en attente.</p><p id="voice-status">Dictée locale sur le Mac.</p>
     <label class="send-option"><input id="send-return" type="checkbox"> Envoyer avec Entrée après chaque phrase</label>
+    <label class="send-option"><input id="show-tab-navigation" type="checkbox" checked> Afficher les boutons d’onglets</label>
+    <p class="hint">Touchez Ghostty sur le bureau, puis utilisez les flèches à droite dans la barre. Elles changent d’onglet dans l’application active du Mac.</p>
     <p class="hint">Calories estimées à partir des watts et du temps de pédalage, avec un rendement supposé de 24 %. Le total est conservé à la réouverture ; une pause de séance suspend aussi ce compteur.</p>
+    <p class="hint">Les courbes de vitesse, résistance et cadence montrent les 15 dernières minutes, de gauche à droite. Chaque courbe a sa propre échelle ; une interruption des mesures laisse un blanc. Une nouvelle séance efface les courbes.</p>
+    <p class="hint">Ultra focus suit automatiquement le son de Spotify sur le Mac : rythme, basses et passages calmes. Le repère RPM est une subdivision du tempo estimé. L’analyse audio s’arrête au retour au bureau ; aucun son n’est enregistré.</p>
     <div class="actions"><button id="insert-pending" hidden>Insérer la dictée en attente</button><button id="desktop-mode">Bureau fluide · passer en image exacte</button><button id="reconnect">Reconnecter le bureau</button><button id="reset-timer">Nouvelle séance · remettre les compteurs à zéro</button></div>
     <p class="hint">Touchez un champ sur le Mac, puis activez la dictée. Les pauses terminent les phrases. L’option ci-dessus contrôle l’envoi avec Entrée. Les rires et interjections isolées sont ignorés.</p>
     <button class="primary" id="close-settings">Revenir au bureau</button>

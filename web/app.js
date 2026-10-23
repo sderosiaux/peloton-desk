@@ -3,13 +3,20 @@ import { passwordDesktop, fastDesktop } from './desktop.mjs';
 import { elapsed, toggle, startOnPedaling, formatDuration } from './session.mjs';
 import { createAPI } from './api.mjs';
 import { energyState, accumulateEnergy, calories } from './energy.mjs';
+import { navigateTab } from './tabs.mjs';
+import { restoreTrends, sampleTrends, mountTrends } from './trends.mjs';
+import { createFocus } from './focus.mjs';
 const PasswordDesktop = passwordDesktop(RFB);
 const FastDesktop = fastDesktop(RFB);
 const $ = id => document.getElementById(id);
 let rfb, status = {}, voiceActive = false, eventSocket, noticeTimer, pendingText = '', finishing = false, lastTranscript = 0, previewPhrase = 0, desktopConnected = false;
 let voicePreferenceLoaded=false, companionReady=false;
+let focusMode=false;
 let timer = { elapsed: Number(localStorage.getItem('elapsed') || 0), running: false, started: 0, manualPause: localStorage.getItem('sessionPaused')==='true' };
 let energy = energyState(localStorage.getItem('energyJoules'));
+let trends = restoreTrends(localStorage.getItem('metricTrends'),Date.now());
+const renderTrends = mountTrends(document);
+renderTrends(trends,Date.now());
 localStorage.removeItem('calorieGoal');
 let fastMode = localStorage.getItem('desktopMode') !== 'exact';
 const origin = location.origin, wsOrigin = origin.replace(/^http/, 'ws');
@@ -22,19 +29,32 @@ async function authenticate() {
 function openDesktop() {
   if (desktopConnected) return;
   if (!status.vncAvailable) { notice('Activez le partage d’écran sur le Mac.'); return; }
+  tabNavigationState();
   if (rfb) { rfb.removeEventListener('disconnect', disconnected); rfb.disconnect(); }
   const Desktop = fastMode ? FastDesktop : PasswordDesktop;
   rfb = new Desktop($('desktop'),wsOrigin+'/vnc'+(fastMode?'?mode=fast':''));
   rfb.scaleViewport=true; rfb.resizeSession=false; rfb.showDotCursor=true; rfb.qualityLevel=7; rfb.compressionLevel=2;
   rfb.addEventListener('credentialsrequired',()=>{ if(!$('password-dialog').open)$('password-dialog').showModal(); $('password').focus(); });
-  rfb.addEventListener('connect',()=>{ desktopConnected=true; $('welcome').hidden=true; $('password-dialog').close(); notice('Bureau connecté. Touchez un champ pour écrire.'); });
+  rfb.addEventListener('connect',()=>{ desktopConnected=true; rfb.viewOnly=focusMode;rfb.setFocusPaused?.(focusMode);tabNavigationState(); $('welcome').hidden=true; $('password-dialog').close(); if(!focusMode)notice('Bureau connecté. Touchez un champ pour écrire.'); });
   rfb.addEventListener('securityfailure',()=>notice('Mot de passe refusé. Vérifiez le mot de passe du partage d’écran.'));
   rfb.addEventListener('disconnect',disconnected);
 }
-function disconnected(){ desktopConnected=false; $('password-dialog').close(); $('welcome').hidden=false; $('connection-detail').textContent='La connexion au bureau est interrompue.'; $('connect').hidden=false; stopVoice(); }
+function disconnected(){ desktopConnected=false; tabNavigationState(); $('password-dialog').close(); $('welcome').hidden=false; $('connection-detail').textContent='La connexion au bureau est interrompue.'; $('connect').hidden=false; stopVoice(); }
 $('password-form').addEventListener('submit',e=>{ e.preventDefault(); rfb?.sendCredentials({password:$('password').value}); $('password').value=''; $('password-dialog').close(); });
 $('password-cancel').onclick=()=>{ $('password-dialog').close(); rfb?.disconnect(); };
 $('connect').onclick=openDesktop;
+function tabNavigationState(){
+  const visible=desktopConnected && !focusMode && $('show-tab-navigation').checked;
+  $('tab-navigation').hidden=!visible;
+  for(const id of ['previous-tab','next-tab'])$(id).disabled=!visible;
+}
+$('show-tab-navigation').checked=localStorage.getItem('showTabNavigation')!=='false';
+$('show-tab-navigation').onchange=()=>{localStorage.setItem('showTabNavigation',String($('show-tab-navigation').checked));tabNavigationState();};
+tabNavigationState();
+for(const direction of ['previous','next'])$(direction+'-tab').onclick=()=>{
+  try{navigateTab(rfb,direction,desktopConnected);}
+  catch{notice('Changement d’onglet indisponible. Reconnectez le bureau.');}
+};
 function sessionState(){ $('session-icon').textContent=timer.running?'Ⅱ':'▶'; $('session').setAttribute('aria-label',timer.running?'Mettre la session en pause':'Démarrer la session');localStorage.setItem('sessionPaused',String(timer.manualPause)); }
 $('session').onclick=()=>{timer=toggle(timer,performance.now());energy={...energy,previous:null};sessionState();};
 setInterval(()=>{ const ms=elapsed(timer,performance.now()); $('duration').textContent=formatDuration(ms); localStorage.setItem('elapsed',Math.round(ms)); },500);
@@ -44,7 +64,7 @@ modeLabel();
 $('desktop-mode').onclick=()=>{fastMode=!fastMode;localStorage.setItem('desktopMode',fastMode?'fast':'exact');modeLabel();notice('Mode choisi. Touchez « Reconnecter le bureau » pour l’appliquer.');};
 $('close-settings').onclick=()=>$('settings-dialog').close();
 $('reconnect').onclick=()=>{ $('settings-dialog').close(); stopVoice(); desktopConnected=false; openDesktop(); };
-$('reset-timer').onclick=()=>{timer={elapsed:0,running:false,started:0,manualPause:false};energy=energyState();sessionState();renderEnergy();$('duration').textContent='00:00';localStorage.setItem('elapsed','0');localStorage.setItem('energyJoules','0');$('settings-dialog').close();};
+$('reset-timer').onclick=()=>{timer={elapsed:0,running:false,started:0,manualPause:false};energy=energyState();trends=[];localStorage.removeItem('metricTrends');renderTrends(trends,Date.now());sessionState();renderEnergy();$('duration').textContent='00:00';localStorage.setItem('elapsed','0');localStorage.setItem('energyJoules','0');$('settings-dialog').close();};
 function renderEnergy(){
   $('calories').textContent=calories(energy.joules).toLocaleString('fr-FR',{minimumFractionDigits:1,maximumFractionDigits:1});
 }
@@ -57,7 +77,13 @@ $('insert-pending').onclick=()=>{
   pendingText='';$('insert-pending').hidden=true;$('settings-dialog').close();
 };
 async function stopVoice(){if(!voiceActive&&!finishing)return;try{await api('voice/stop',{source:'bike'});}catch{} voiceState(false);}
-function voiceState(active,phase){voiceActive=active;$('send-return').disabled=active||phase==='finishing'||phase==='starting';finishing=phase==='finishing'||phase==='starting';$('voice').disabled=finishing;$('voice').setAttribute('aria-pressed',String(active));$('voice-label').textContent=phase==='starting'?'Préparation…':finishing?'Transcription…':active?'À l’écoute':'Dictée';}
+function voiceState(active,phase){
+  voiceActive=active;finishing=phase==='finishing'||phase==='starting';
+  $('send-return').disabled=active||finishing;$('voice').disabled=finishing;
+  $('voice').setAttribute('aria-pressed',String(active));$('voice').setAttribute('aria-busy',String(finishing));
+  const label=phase==='starting'?'Préparation…':finishing?'Transcription…':active?'Terminer la dictée':'Démarrer la dictée';
+  $('voice').setAttribute('aria-label',label);$('voice').title=label;
+}
 $('voice').onclick=async()=>{try{if(voiceActive){$('voice').disabled=true;await api('voice/finish',{});return;}if($('welcome').hidden===false){notice('Connectez le bureau, puis touchez un champ de texte.');return;}$('voice').disabled=true;await api('voice/start',{sendReturn:$('send-return').checked});}catch(e){$('voice').disabled=false;notice(e.message);}};
 function voiceEvents(){
   lastTranscript=0;
@@ -87,14 +113,24 @@ function voiceEvents(){
   };
   eventSocket.onclose=()=>{voiceState(false);setTimeout(voiceEvents,3000);};
 }
+function recordTrends(metrics={}){
+  if(document.hidden)return;
+  const now=Date.now();
+  const next=sampleTrends(trends,metrics,now);
+  if(next===trends)return;
+  trends=next;renderTrends(trends,now);
+  try{localStorage.setItem('metricTrends',JSON.stringify(trends));}catch{/* Curves still work when local storage is full. */}
+}
 function metrics(){
   try{
     const m=JSON.parse(window.DeskDevice?.metrics()||'{"available":false,"detail":"Capteurs disponibles sur le Bike."}');
+    focus.metrics(m);
     const nextTimer=startOnPedaling(timer,m.available?m.cadence:undefined,performance.now());
     if(nextTimer!==timer){timer=nextTimer;sessionState();}
     energy=accumulateEnergy(energy,m.power,performance.now(),timer.running&&m.available);
     localStorage.setItem('energyJoules',String(energy.joules));renderEnergy();
-    for(const key of ['speed','resistance','power','cadence'])$(key).textContent=m.available&&Number.isFinite(m[key])?(key==='speed'?m[key].toFixed(1):Math.round(m[key])):'—';
+    for(const key of ['speed','resistance','cadence'])$(key).textContent=m.available&&Number.isFinite(m[key])?(key==='speed'?m[key].toFixed(1):Math.round(m[key])):'—';
+    recordTrends(m.available?m:{});
     $('sensor-status').textContent=m.available?'Capteurs connectés · vitesse estimée à partir de la puissance.':m.detail||'En attente des capteurs.';
     // Numeric diagnostics only: lets the Mac distinguish live sensors from a stale UI.
     // Diagnostics must not reset accumulation if the installed bridge is older.
@@ -102,7 +138,7 @@ function metrics(){
       window.DeskDevice?.reportMetrics?.(m.available?m.cadence:-1,m.available?m.power:-1,elapsed(timer,performance.now()),timer.running,timer.manualPause);
       window.DeskDevice?.reportEnergy?.(energy.joules,calories(energy.joules));
     }catch{}
-  }catch{energy={...energy,previous:null};$('sensor-status').textContent='Capteurs indisponibles.';}
+  }catch{focus.metrics(null);energy={...energy,previous:null};recordTrends();$('sensor-status').textContent='Capteurs indisponibles.';}
 }
 $('send-return').onchange=()=>localStorage.setItem('sendReturn',String($('send-return').checked));
 async function refreshStatus(throwOnError=false){
@@ -115,7 +151,12 @@ async function connectCompanion(){
   catch(e){$('connection-detail').textContent=e.message;if(e.retryable)setTimeout(connectCompanion,2000);}
 }
 function main(){connectCompanion();metrics();setInterval(metrics,500);setInterval(()=>{if(companionReady)refreshStatus();},5000);}
-document.addEventListener('visibilitychange',()=>{if(document.hidden)stopVoice();});
-window.DeskPause=stopVoice;
-window.DeskOpenDesktop=async()=>{if(desktopConnected)return;await refreshStatus();openDesktop();};
+const focus=createFocus({root:$('focus'),toggle:$('focus-toggle'),onChange:active=>{
+  focusMode=active;tabNavigationState();
+  if(active){stopVoice();$('settings-dialog').close();$('password-dialog').close();$('notice').hidden=true;}
+  if(rfb){rfb.viewOnly=active;rfb.setFocusPaused?.(active);if(active)rfb.blur();else if(desktopConnected)rfb.focus({preventScroll:true});}
+}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){stopVoice();focus.pause();}else{focus.resume();}});
+window.DeskPause=()=>{stopVoice();focus.pause();};
+window.DeskOpenDesktop=async()=>{focus.exit();if(desktopConnected)return;await refreshStatus();openDesktop();};
 main();

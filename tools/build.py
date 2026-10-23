@@ -78,10 +78,16 @@ def mac():
             'CFBundleExecutable': 'PelotonDesk', 'CFBundlePackageType': 'APPL',
             'CFBundleShortVersionString': '0.1.0', 'CFBundleVersion': '1', 'LSUIElement': True,
             'LSMinimumSystemVersion': '14.0', 'PDProjectRoot': str(ROOT),
-            'NSMicrophoneUsageDescription': 'Transcrire localement votre voix quand vous activez la dictée sur le Bike.'}
+            'NSMicrophoneUsageDescription': 'Transcrire localement votre voix quand vous activez la dictée sur le Bike.',
+            'NSAudioCaptureUsageDescription': 'Animer Ultra focus au rythme du son de Spotify. Analyse locale, sans enregistrer la musique.'}
     (contents / 'Info.plist').write_bytes(plistlib.dumps(info))
+    # Swift requires the file containing executable entry-point statements to be main.swift.
+    main = LOCAL / 'build/mac/main.swift'
+    main.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / 'macos/Companion.swift', main)
     run('swiftc', '-swift-version', '5', '-O', '-framework', 'AppKit', '-framework', 'AVFoundation',
-        '-framework', 'ApplicationServices', '-framework', 'ServiceManagement', '-framework', 'Carbon', '-framework', 'WebKit', ROOT / 'macos/Companion.swift', '-o', binary)
+        '-framework', 'ApplicationServices', '-framework', 'ServiceManagement', '-framework', 'Carbon', '-framework', 'WebKit',
+        '-framework', 'CoreAudio', main, ROOT / 'macos/Music.swift', '-o', binary)
     from sign_mac import sign
     sign(app)
     print(app)

@@ -18,6 +18,74 @@ Conserver les résultats personnels dans `.local/validation.md`.
 
 ## Bureau et tactile
 
+### Ultra focus RPM — 19 octobre 2026
+
+- [x] `make app-test` : 74 tests Python/JavaScript et auto-tests Swift réussis.
+  Le moteur musical reconnaît les impulsions générées à 90/120/168 BPM,
+  reste utilisable à faible volume et retire la confiance après silence ;
+  un son continu ne crée pas de tempo. Aucun micro ni son joué pour ces tests.
+- [x] Tests du flux musical : authentification et origine, une seule capture
+  partagée, arrêt au dernier départ, reprise après échec, file de sortie bornée.
+- [x] Tests du rendu : signal périmé/invalide, absence de repère en cas de doute,
+  adaptation à l’énergie et aux basses à tempo identique, suspension/reprise
+  des demandes d’images du bureau fluide.
+- [x] Interface intégrée vérifiée dans Chrome, avec signaux fictifs, en plein écran
+  et à 560 px : entrée/sortie Focus, cadence centrale, chiffres de la barre sombre,
+  contrôles dans une seule rangée et retour des commandes du bureau.
+- [x] Compagnon Mac compilé et installé en conservant l’identité de signature.
+  Dictée inactive vérifiée avant redémarrage ; droits existants toujours reconnus.
+- [x] Capture réelle de Spotify sur ce Mac : des centaines de mesures reçues
+  à environ 20 Hz, énergie/basses/attaques variables et tempo estimé disponible.
+  Test de la version finale après calibration des faibles volumes. Aucun fichier
+  audio conservé ; seuls les résumés numériques sont dans `.local/`.
+- [x] Diagnostic matériel : six vérifications réussies, interface Bike rechargée
+  avec identifiant ADB explicite, serveur ADB conservé. Mesures de la barre fraîches
+  après rechargement (âge observé inférieur à 200 ms).
+- [x] Correction des textes instables : `make app-test` (79 tests Python/JavaScript
+  et auto-tests Swift) et compilation web réussis. Tests temporels des creux audio,
+  variations de confiance, scores d’ambiance concurrents, tempo double/moitié,
+  changement soutenu de tempo, silence, perte du flux et choix de subdivision.
+  Les ambiances exigent 3 s de confirmation et restent affichées au moins 8 s ;
+  le tempo affiché change au maximum toutes les 5 s. Les creux brefs sont tolérés,
+  les pulsations restent sur le chemin audio rapide.
+- [x] Version corrigée servie par le Mac : contenu HTML/JS identique au build.
+  Diagnostic suivant la correction : cinq vérifications réussies, Bike hors ligne ;
+  aucun redémarrage du serveur ADB ni de la dictée.
+- [ ] Stabilité des textes confirmée sur le Bike après rechargement de l’interface.
+- [ ] Fluidité du paysage et confort visuel confirmés sur le Bike en pédalant.
+- [ ] Alignement perceptif des pulsations avec le son entendu, notamment sur la
+  sortie audio utilisée ; stabilité du tempo sur différents morceaux et breaks.
+- [ ] Retour au bureau après une longue immersion et changement de sortie audio
+  ou redémarrage de Spotify confirmés en usage réel.
+
+Le tempo est une estimation locale : les subdivisions et les rythmes complexes
+peuvent donner un tempo double ou moitié. Le repère RPM disparaît quand la confiance
+ou la présence du rythme restent insuffisantes pendant plus de deux secondes ;
+une perte du flux retire immédiatement le repère. Il ne mesure pas la phase du pédalage.
+
+### Bureau et métriques intégrées
+
+- [x] 18 octobre : `make app-test` (67 tests Python/JS et auto-test Swift),
+  compilation web et `make app-doctor` réussis après ajout des boutons d’onglets
+  et des courbes en fond des indicateurs.
+- [x] Aperçu Chrome avec données fictives : chiffres lisibles, dimensions des
+  indicateurs identiques avec/sans courbes, boutons de 64 px, rendu compact à
+  560 px. Navigation simulée, masquage des boutons, déconnexion et remise à zéro
+  vérifiés ; aucune touche envoyée à Ghostty et aucun micro utilisé pour ces tests.
+- [x] Tests d’historique : fenêtre de 15 minutes, stockage borné, restauration,
+  valeurs nulles/zéro, interruption des mesures et correction de l’horloge.
+- [x] Correction du 18 octobre : courbes limitées à vitesse/résistance/cadence,
+  puissance retirée de la barre, durée et kcal numériques. Compilation web,
+  `make app-test` et diagnostic réussis ; interface servie contrôlée et app Bike
+  relancée avec son identifiant explicite. Rendu matériel de cette correction
+  encore à confirmer.
+- [x] Flèches d’onglets intégrées à droite dans la barre et dictée réduite à son
+  icône : compilation web et `make app-test` réussis. Aperçu Chrome vérifié en
+  plein écran, 900 et 560 px ; une seule rangée, hauteur de 84 px sur grand écran,
+  sans boutons en dehors de la barre. États de dictée et raccourcis simulés,
+  sans micro ni saisie réelle. Confort sur le Bike encore à confirmer.
+- [ ] Navigation réelle entre onglets Ghostty et confort des boutons sur le Bike.
+- [ ] Évolution des courbes en pédalant pendant plusieurs minutes sur le Bike.
 - [x] Authentification VNC : acceptée après correction du choix VNCAuth/ARD.
 - [x] Miroir de la session physique confirmé après réglage console et redémarrage du partage.
 - [ ] Toucher précis dans les quatre coins, changement de fenêtre, sélection d’un champ.
@@ -104,7 +172,7 @@ Conserver les résultats personnels dans `.local/validation.md`.
 - [ ] Cadence, résistance et vitesse estimée évoluent en pédalant et en tournant la molette.
 - [ ] Durée : démarrage, pause, reprise et remise à zéro.
 - [x] Tests : démarrage au pédalage, absence de double démarrage et respect d’une pause manuelle.
-- [ ] Puissance instantanée affichée et durée démarrant au pédalage confirmées sur le Bike.
+- [ ] Durée démarrant au pédalage confirmée sur le Bike.
 - [ ] Les métriques continuent pendant le bureau distant et la dictée.
 - [ ] La barre laisse accessibles les zones de travail utiles.
 

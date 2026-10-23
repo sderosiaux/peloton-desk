@@ -717,6 +717,7 @@ if args.contains("--check-input-config") {
     // No focus lookup, clipboard access, microphone or input events.
     emit(["accessibility":AXIsProcessTrusted(),"pasteKeyAvailable":pasteKey() != nil])
 } else if args.contains("--self-test") {
+    MusicAnalyzer.selfTest()
     for text in ["Ha ha.","Ha ha ha.","Okay.","OK… euh, bon.","Hahaha !","Héhéhé.","Euh…","Hmm","Alors, voilà.","..."] {
         precondition(isNonContentUtterance(text),"Unfiltered filler: \(text)")
     }
@@ -767,6 +768,14 @@ if args.contains("--check-input-config") {
     let pause=longPhrase.accept(Array(repeating:Float(0),count:16000))
     precondition(pause.ended && pause.completed?.isEmpty == true && !longPhrase.speaking)
     print("Voice segmentation and paste/Return sequencing checks passed; no microphone or input events used.")
+} else if args.contains("--music-info") {
+    if #available(macOS 14.2, *) {
+        emit(["supported":true,"spotifyProcesses":MusicCapture.spotifyProcesses().count])
+    } else { emit(["supported":false,"spotifyProcesses":0]) }
+} else if args.contains("--music") {
+    if #available(macOS 14.2, *) {
+        let capture=MusicCapture();capture.begin();RunLoop.main.run()
+    } else { emit(["type":"music-state","phase":"error","detail":"Ultra focus nécessite macOS 14.2 ou plus récent."]) }
 } else if args.count==5 && ["--check-audio","--check-parakeet"].contains(args[1]) {
     // Offline fixture check: no microphone, focus lookup or input injection.
     do {

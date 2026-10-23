@@ -1,5 +1,22 @@
 # Configuration de l’app unique
 
+## Ultra focus RPM
+
+Compiler le web et le compagnon Mac (`npm run build`, `python3 tools/build.py mac`),
+puis mettre à jour le compagnon installé avec son identité de signature existante.
+Le mode n’exige pas de modification du paquet Android.
+
+Ouvrir Spotify sur le Mac, lancer un morceau, puis toucher la cible dans la barre
+du Bike. Autoriser l’audio système de **Peloton Desk Mac** si macOS le demande.
+En cas de refus : Réglages Système → Confidentialité et sécurité → Enregistrement
+de l’écran et de l’audio système, puis **Réessayer** dans Focus. Aucune autorisation
+micro supplémentaire n’est nécessaire pour ce mode.
+
+Le diagnostic natif `PelotonDesk --music-info` vérifie la disponibilité de Core Audio
+et la présence des processus Spotify sans lancer de capture. La capture commence
+uniquement avec un écran Focus connecté au flux authentifié `/music`.
+Les tests du moteur utilisent des signaux générés en mémoire, sans son joué ni micro.
+
 ## Connexion du Bike
 
 Le Bike et le Mac doivent conserver leur connexion ADB appairée. Vérifier avec

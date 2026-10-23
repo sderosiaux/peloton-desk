@@ -90,3 +90,14 @@ test('resize refreshes the new bounds and other server messages use noVNC',()=>{
   client._sock.rQpeek8=()=>2;client._normalMsg();
   assert.equal(client.otherMessages,1);assert.equal(requests.length,2);
 });
+test('focus drains in-flight desktop frames and resumes with a full refresh',()=>{
+  const {client,requests}=frameClient();
+  client.setFocusPaused(true);
+  client._normalMsg();client._normalMsg();
+  assert.equal(requests.length,0);
+  client.setFocusPaused(false);
+  assert.deepEqual(requests,[[false,0,0,1920,1080]]);
+  client.setFocusPaused(false);
+  assert.equal(requests.length,1);
+  client._normalMsg();assert.equal(requests.length,2);
+});
